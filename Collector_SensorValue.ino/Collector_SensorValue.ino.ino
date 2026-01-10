@@ -1,4 +1,12 @@
 #include<Wire.h>
+#include "DHT.h"
+#include "FS.h"
+#include "SD_MMC.h"
+
+#define DHTPIN 33
+#define DHTTPE DHT11
+
+DHT dht(DHTPIN, DHTTPE);
 
 const int MPU=0x68;//MPU6050 I2C주소
 
@@ -13,22 +21,27 @@ void setup() {
   Wire.write(0);//MPU6050 을 동작 대기 모드로 변경
   Wire.endTransmission(true);
   Serial.begin(115200);
-  //pinMode(32, INPUT);
+  dht.begin();
+  pinMode(32, INPUT);
 }
 
 void loop() {
-  //int illuminanceValue = analogRead(32); //조도센서 값 측정
-  //Serial.println(illuminanceValue);      //조도센서 값 출력
-  //delay(100);
-
+  delay(2000);
+    
   get6050();//센서값 갱신
   //받아온 센서값을 출력
-  Serial.print(AcX);
-  Serial.print("");
-  Serial.print(AcY);
-  Serial.print("");
-  Serial.print(AcZ);
-  Serial.println();
+  float VectorMove = abs(pow(AcX,2) + pow(AcY, 2) + pow(AcZ, 2));
+  float h = dht.readHumidity();    // 습도
+  float t = dht.readTemperature(); // 온도(섭씨)
+  int illuminanceValue = analogRead(32); //조도센서 값 측정
+
+  Serial.print(VectorMovd);
+  Serial.print(",");
+  Serial.print(h);
+  Serial.print(",");
+  Serial.print(t);
+  Serial.print(",");
+  Serial.println(illuminanceValue);      //조도센서 값 출력
   delay(15);  
 }
 
