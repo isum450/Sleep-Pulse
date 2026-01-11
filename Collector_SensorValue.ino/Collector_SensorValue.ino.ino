@@ -30,12 +30,12 @@ void loop() {
     
   get6050();//센서값 갱신
   //받아온 센서값을 출력
-  float VectorMove = abs(pow(AcX,2) + pow(AcY, 2) + pow(AcZ, 2));
+  float VectorMove = sqrt(pow(AcX,2) + pow(AcY, 2) + pow(AcZ, 2));
   float h = dht.readHumidity();    // 습도
   float t = dht.readTemperature(); // 온도(섭씨)
   int illuminanceValue = analogRead(32); //조도센서 값 측정
 
-  Serial.print(VectorMovd);
+  Serial.print(VectorMove);
   Serial.print(",");
   Serial.print(h);
   Serial.print(",");
