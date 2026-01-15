@@ -78,7 +78,7 @@ def calculate_score(row):
 
 
 
-target = 3
+target = 5
 
 selected_row = df.iloc[target]
 final_score = calculate_score(selected_row)
@@ -88,4 +88,5 @@ print(f"움직임: {selected_row['Movement']}")
 print(f"습도: {selected_row['Humidity']}")
 print(f"온도: {selected_row['Temperature']}")
 print(f"조도: {selected_row['Illuminance']}")
+#print(f"소리: {selected_row['sound']}")
 print(f"점수: {final_score:.2f}")
