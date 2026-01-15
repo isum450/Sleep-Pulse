@@ -2,6 +2,7 @@
 #include "DHT.h"
 #include "FS.h"
 #include "SD_MMC.h"
+#include<PubSubClient.h>
 
 #define DHTPIN 33
 #define DHTTPE DHT11
@@ -9,24 +10,95 @@
 DHT dht(DHTPIN, DHTTPE);
 
 const int MPU=0x68;//MPU6050 I2C주소
+const char* ssid = "";//Wifi ssid
+const char* password = "";//Wifi password
+const char* mqtt_server = ""; //브로커 IP 주소
+
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 int AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;
 
 void get6050();
 
+void setup_wifi()
+{
+  delay(10);
+  Serial.begin(115200);
+  Serial.println();
+  Serial.print("Connection to ");
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while(WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void callback(char* topic, byte* payload, unsigned int length)
+{
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for(int i = 0; i < length; i++)
+  {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+}
+
+void callback(char* topic, byte* payload, unsigned int length)
+{
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for(int i = 0; i < length; i++)
+  {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    if (client.connect("ArduinoClient")) {
+      Serial.println("connected");
+      client.subscribe("test/topic");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
+}
+
 void setup() {
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
   Wire.begin(27, 26);
   Wire.beginTransmission(MPU);
   Wire.write(0x6B);
   Wire.write(0);//MPU6050 을 동작 대기 모드로 변경
   Wire.endTransmission(true);
-  Serial.begin(115200);
   dht.begin();
   pinMode(32, INPUT);
 }
 
 void loop() {
-  delay(2000);
+  if(!client.connected()) {
+    reconnect();
+  }
     
   get6050();//센서값 갱신
   //받아온 센서값을 출력
@@ -35,14 +107,21 @@ void loop() {
   float t = dht.readTemperature(); // 온도(섭씨)
   int illuminanceValue = analogRead(32); //조도센서 값 측정
 
-  Serial.print(VectorMovd);
+  client.publish("sensor/VectorMove", String(VectorMove).c_str());
+  client.publish("sensor/humidity", String(h).c_str());
+  client.publish("sensor/temperature", String(t).c_str());
+  client.publish("sensor/illuminance", String(illuminanceValue).c_str());
+/*
+  Serial.print(VectorMove);
   Serial.print(",");
   Serial.print(h);
   Serial.print(",");
   Serial.print(t);
   Serial.print(",");
   Serial.println(illuminanceValue);      //조도센서 값 출력
-  delay(15);  
+*/
+  client.loop();
+  delay(1000);
 }
 
 void get6050(){
