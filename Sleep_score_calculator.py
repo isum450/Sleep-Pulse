@@ -12,8 +12,6 @@ cols_to_numeric = ['Movement', 'Humidity', 'Temperature', 'Illuminance']
 for col in cols_to_numeric:
     df[col] = pd.to_numeric(df[col], errors='coerce') # 에러나면 NaN 처리
 
-
-
 # 2. 점수 계산 함수
 def calculate_score(row):
     temp = row['Temperature']
