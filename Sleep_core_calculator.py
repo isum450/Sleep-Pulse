@@ -1,18 +1,17 @@
 import pandas as pd
 
-filename = 'C:/Users/ju/Sleep-Pulse/Sleep-Pulse/test.csv'
+filename = 'C:/Users/ju/Sleep-Pulse/Sleep-Pulse/sleep_data.csv'
 
+df_raw = pd.read_csv(filename, header=None, 
+                        names=['Time', 'Movement', 'Humidity', 'Temperature', 'Illuminance', 'Trash'])
 
-df_raw = pd.read_csv(filename, header=None, names=['Time', 'DataValue'])
-    
-split_data = df_raw['DataValue'].str.split(',', expand=True)
-split_data = split_data.astype(float)
+if 'Trash' in df_raw.columns:
+        df = df_raw.drop(columns=['Trash'])
 
-#(순서: 움직임, 습도, 온도, 조도)
-split_data.columns = ['Movement', 'Humidity', 'Temperature', 'Illuminance']
-#'Sound'추가(데이터 생기면)
+cols_to_numeric = ['Movement', 'Humidity', 'Temperature', 'Illuminance']
+for col in cols_to_numeric:
+    df[col] = pd.to_numeric(df[col], errors='coerce') # 에러나면 NaN 처리
 
-df = pd.concat([df_raw['Time'], split_data], axis=1)
 
 
 # 2. 점수 계산 함수
@@ -76,7 +75,7 @@ def calculate_score(row):
 
 
 
-target = 5
+target = 2
 
 selected_row = df.iloc[target]
 final_score = calculate_score(selected_row)
