@@ -43,10 +43,8 @@ def calculate_score(row):
         score_lux = 20
     elif 300 <= lux < 600:
         score_lux = 17.5
-    elif 600 <= lux < 1500:
-        score_lux = 15
     else:
-        score_lux = 12.5
+        score_lux = 15
     
     #습도 10점 만점
     if temp < 16: target_humid = 70
