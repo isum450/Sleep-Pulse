@@ -1,13 +1,18 @@
-import paho.mqtt.client as mqtt
 import csv
-import json
-import os
+import time
+import statistics
 from datetime import datetime
+import json
+import paho.mqtt.client as mqtt
 
-# 1. 설정
+FILENAME = 'sensor_datalog.csv'
 broker_address = "broker.hivemq.com"
 topic = "leesu/sensor/data"
-csv_filename = "sleep_data.csv"  # 이 파일명으로 통일됨
+
+buffer_hum = []
+buffer_temp = []
+buffer_lux = []
+buffer_motion = []
 
 def on_connect(client, userdata, flags, rc, properties=None):
     print(f"Success Connection topic : {topic}")
@@ -16,40 +21,47 @@ def on_connect(client, userdata, flags, rc, properties=None):
 def on_message(client, userdata, msg):
     try:
         payload = msg.payload.decode('utf-8')
-        print(f"Received message: {payload}")
-
-        # JSON 파싱
         data = json.loads(payload)
 
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        m = float(data.get("motion", 0))
+        h = float(data.get("humidity", 0))
+        t = float(data.get("temperature", 0))
+        l = int(data.get("illuminance", 0))
 
-        # 데이터 추출 (없으면 None 처리)
-        row = [
-            current_time, 
-            data.get('motion'), 
-            data.get('humidity'), 
-            data.get('temperature'), 
-            data.get('illuminance')
-        ]
+        buffer_hum.append(h)
+        buffer_temp.append(t)
+        buffer_lux.append(l)
 
-        # 2. 변수명(csv_filename) 사용 + 엑셀 깨짐 방지(utf-8-sig)
-        with open(csv_filename, 'a', newline='', encoding='utf-8-sig') as f:
-            writer = csv.writer(f)
-            writer.writerow(row)
-            print(f"저장 완료: {row}")
+        print(f"움직임{m}, 습도{h}%, 온도{t}, 조도{l}")
+
+        if len(buffer_hum) >= 30:
+            timestamp = datetime.now().strftime("%y-%m-%d %H:%M")
+
+            avg_hum = round(statistics.mean(buffer_hum), 1)
+            avg_temp = round(statistics.mean(buffer_temp), 1)
+            avg_lux = int(statistics.mean(buffer_lux) / 4)
+
+            data_value_str = f"0,{avg_hum},{avg_temp},{avg_lux},0"
+
+            with open(FILENAME, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([timestamp, data_value_str])
+
+            buffer_hum.clear()
+            buffer_temp.clear()
+            buffer_lux.clear()
 
     except json.JSONDecodeError:
         print(f"에러: 들어온 데이터가 JSON이 아닙니다 -> {payload}")
     except Exception as e:
-        print(f"에러 발생: {e}")
+        print(f"에러 발생: {e}")       
 
-# 파일 헤더 생성 (변수명 통일)
-if not os.path.exists(csv_filename):
-    with open(csv_filename, 'a', newline='', encoding='utf-8-sig') as f:
-        writer = csv.writer(f)
-        writer.writerow(['timestamp', 'motion', 'humidity', 'temperature', 'illuminance'])
+try:
+    with open(FILENAME, 'x', newline='') as f:
+        pass 
+except FileExistsError:
+    pass
 
-# 3. Paho MQTT 최신 버전(2.x) 호환성 대응
 try:
     # Paho MQTT v2.x 대응
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
