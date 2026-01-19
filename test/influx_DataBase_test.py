@@ -17,6 +17,7 @@ bucket = "sleep_pulse"
 # 연결 시작
 client = InfluxDBClient(url=url, token=token, org=org)
 write_api = client.write_api(write_options=SYNCHRONOUS)
+                            #동기방식: 하나보내고 다음거 확인하는
 
 print("InfluxDB 데이터 전송 시작")
 
@@ -26,15 +27,20 @@ for i in range(5):
     # Tag(태그): location=bedroom (침실 데이터)
     # Field(값): temperature, humidity (실제 센서 값)
     
-    p = Point("environment") \
+    p = Point("sleep") \
         .tag("location", "bedroom") \
         .field("temperature", 24.0 + i) \
         .field("humidity", 50.0 - i) \
         .field("movement", 0.0)
-
+    
+    print("\n 라인 프로토콜 미리보기:")
+    print(p.to_line_protocol()) 
+    print("-" * 30)
+    
     write_api.write(bucket=bucket, org=org, record=p)
     print(f"데이터 저장 중... (온도: {24.0 + i})")
     time.sleep(1)
+
 
 print("전송 완료!")
 client.close()
