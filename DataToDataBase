@@ -61,7 +61,7 @@ def on_message(client, userdata, msg):
             avg_lux = int(statistics.mean(buffer_lux) / 4)
 
             p = Point(INFLUX_MEASUREMENT) \
-                .tag("location", "bedroom") \
+                .tag("user", "leechunsik") \
                 .field("avg_temperature", avg_temp) \
                 .field("avg_humidity", avg_hum) \
                 .field("avg_movement", avg_motion) \
