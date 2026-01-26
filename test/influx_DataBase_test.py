@@ -18,7 +18,7 @@ bucket = "sleep_pulse"
 client = InfluxDBClient(url=url, token=token, org=org)
 write_api = client.write_api(write_options=SYNCHRONOUS)
                             #동기방식: 하나보내고 다음거 확인하는
-
+"""
 print("InfluxDB 데이터 전송 시작")
 
 for i in range(5):
@@ -36,11 +36,11 @@ for i in range(5):
     print("\n 라인 프로토콜 미리보기:")
     print(p.to_line_protocol()) 
     print("-" * 30)
-    
+
     write_api.write(bucket=bucket, org=org, record=p)
     print(f"데이터 저장 중... (온도: {24.0 + i})")
     time.sleep(1)
-
+"""
 
 print("전송 완료!")
 client.close()
