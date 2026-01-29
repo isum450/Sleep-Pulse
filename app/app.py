@@ -17,7 +17,7 @@ def logout():
 
 # 메인 함수
 def main():
-    st.set_page_config(page_title="SLEEP=PULSE")
+    st.set_page_config(page_title="SLEEP PULSE")
 
     # 1. 로그인 상태일 때 화면
     if st.session_state['is_logged_in']:
@@ -31,7 +31,7 @@ def main():
 
     # 2. 비로그인 상태일 때 화면
     else:
-        st.title("SLEEP=PULSE")
+        st.title("SLEEP PULSE")
         
         tab1, tab2 = st.tabs(["로그인", "회원가입"])
 
@@ -54,18 +54,26 @@ def main():
             st.subheader("회원가입")
             new_id = st.text_input("새 아이디", key="new_id")
             new_pw = st.text_input("새 비밀번호", type="password", key="new_pw")
+            new_pw_check = st.text_input("비밀번호 확인", type="password", key="new_pw_check")
             new_email = st.text_input("이메일", key="new_email")
             
             if st.button("가입하기"):
-                if new_id and new_pw:
-                    if db.signup(new_id, new_pw, new_email):
-                        st.success("회원가입 성공. 로그인 탭에서 로그인해주세요.")
+                # 1. 모든 칸이 채워져 있는지 확인
+                if new_id and new_pw and new_pw_check:
+                    # 2. 비밀번호와 확인 비밀번호가 같은지 확인
+                    if new_pw == new_pw_check:
+                        if db.signup(new_id, new_pw, new_email):
+                            st.success("회원가입 성공. 로그인 탭에서 로그인해주세요.")
+                        else:
+                            st.error("이미 존재하는 아이디입니다.")
                     else:
-                        st.error("이미 존재하는 아이디입니다.")
+                        st.error("비밀번호가 서로 일치하지 않습니다.") # 다르면 에러
                 else:
-                    st.warning("아이디와 비밀번호를 입력해주세요.")
+                    st.warning("모든 정보를 입력해주세요.")
 
 if __name__ == "__main__":
     db.init_db()
     #db실행함수
     main()
+
+    #python -m streamlit run app.py
