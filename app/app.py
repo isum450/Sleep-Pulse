@@ -92,6 +92,37 @@ def main():
             st.divider()
             if st.button("로그아웃", type="primary"):
                 logout()
+        if st.sidebar.button("로그아웃"):
+            logout()
+            
+        st.title("수면 데이터 분석")
+
+        # --- 수집 제어 버튼 ---
+        st.subheader("📡 데이터 수집 제어")
+
+        if 'is_recording' not in st.session_state:
+            st.session_state['is_recording'] = False
+
+        # 녹화 중인지 아닌지에 따라 UI 다르게 보여주기
+        if st.session_state['is_recording']:
+            st.success(f"현재 '{st.session_state['username']}'님의 데이터를 수집 중입니다... ")
+            
+            if st.button("⏹️ 수집 중지"):
+                # 1. DB 업데이트 (user_manager 함수 사용!)
+                db.update_recording_status(st.session_state['username'], False)
+                # 2. 화면 상태 변경
+                st.session_state['is_recording'] = False
+                st.rerun()
+        else:
+            st.info("데이터 수집을 시작하려면 버튼을 누르세요.")
+            
+            if st.button("▶️ 수집 시작"):
+                # 1. DB 업데이트 (user_manager 함수 사용!)
+                db.update_recording_status(st.session_state['username'], True)
+                # 2. 화면 상태 변경
+                st.session_state['is_recording'] = True
+                st.rerun()
+
 
        # 화면 1: 메인 옵션 메뉴 (로그인 직후 화면)
         if st.session_state['current_view'] == 'menu':
@@ -257,6 +288,8 @@ def main():
                         st.error("비밀번호가 서로 일치하지 않습니다.") # 다르면 에러
                 else:
                     st.warning("모든 정보를 입력해주세요.")
+
+
 
 if __name__ == "__main__":
     db.init_db()
