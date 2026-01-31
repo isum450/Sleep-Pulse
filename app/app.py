@@ -15,7 +15,7 @@ INFLUX_ORG = "personal project"
 INFLUX_BUCKET = "sleep_pulse"
 INFLUX_MEASUREMENT = "sleep_sensor_data"
 
-BROKER = "test.mosquitto.org" # 예시 (본인이 쓰는 브로커 주소)
+BROKER = "broker.emqx.io" # 예시 (본인이 쓰는 브로커 주소)
 PORT = 1883
 TOPIC_CONTROL = "sleep_pulse/control" # 명령을 주고받을 전용 채널
 

@@ -13,7 +13,7 @@ DHT dht(DHTPIN, DHTTPE);
 const int MPU=0x68;//MPU6050 I2C주소
 const char* ssid = "U+Net7428";//Wifi ssid
 const char* password = "1J3A4AF87#";//Wifi password
-const char* mqtt_server = "broker.hivemq.com"; //wifi IP 주소
+const char* mqtt_server = "broker.emqx.io"; //wifi IP 주소
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -119,7 +119,7 @@ void loop() {
   Serial.print(",");
   Serial.println(illuminanceValue);      //조도센서 값 출력
 */
-  delay(2000);
+  delay(100);
 }
 
 void get6050(){
