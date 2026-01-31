@@ -87,7 +87,7 @@ def send_command(user, status):
     MQTT로 녹화 시작/중지 명령을 보내는 함수
     status: True(시작) / False(중지)
     """
-    client = mqtt.Client()
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.connect(BROKER, PORT)
     
     if status:
