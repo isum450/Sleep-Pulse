@@ -2,7 +2,7 @@ import sqlite3
 import hashlib
 
 # DB 파일 이름 설정
-DB_FILENAME = 'C:/Users/ju/Sleep-Pulse/Sleep-Pulse/app/users.db'
+DB_FILENAME = 'users.db'
 
 # 데이터베이스 초기화 (테이블 생성)
 def init_db():
