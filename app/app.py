@@ -81,24 +81,36 @@ def load_data():
     except Exception as e:
         st.error(f"데이터 연결 오류: {e}")
         return None
-
+# MQTT로 명령 전송 함수
 def send_command(user, status):
-    """
-    MQTT로 녹화 시작/중지 명령을 보내는 함수
-    status: True(시작) / False(중지)
-    """
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.connect(BROKER, PORT)
-    
-    if status:
-        # 메시지 예시: "START:leeso"
-        msg = f"START:{user}"
-    else:
-        # 메시지 예시: "STOP"
-        msg = "STOP"
+    try:
+        # 1. 클라이언트 생성 (Paho v2 대응)
+        try:
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        except AttributeError:
+            client = mqtt.Client()
+            
+        # 2. 브로커 연결 (DataToDataBase.py랑 똑같은 주소여야 함!)
+        # "broker.hivemq.com" 인지 꼭 확인하세요.
+        client.connect(BROKER, PORT)
         
-    client.publish(TOPIC_CONTROL, msg)
-    client.disconnect()
+        # 3. 메시지 만들기
+        if status:
+            msg = f"START:{user}"
+        else:
+            msg = "STOP"
+            
+        # 4. 전송 (Publish)
+        info = client.publish(TOPIC_CONTROL, msg)
+        
+        # [중요] 메시지가 갈 때까지 잠깐 기다려줌 (안전장치)
+        info.wait_for_publish() 
+        
+        client.disconnect()
+        print(f"전송 성공: {msg}") # Streamlit 로그에 찍힘
+        
+    except Exception as e:
+        print(f"MQTT 전송 에러: {e}")
 
 # 메인 함수
 def main():
