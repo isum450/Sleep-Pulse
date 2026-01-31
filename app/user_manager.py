@@ -2,7 +2,7 @@ import sqlite3
 import hashlib
 
 # DB 파일 이름 설정
-DB_FILENAME = 'C:/Users/ju/Sleep-Pulse/Sleep-Pulse/app/users.db'
+DB_FILENAME = 'C:/Users/leeso/source/repos/Sleep-Pulse/app/users.db'
 
 # 데이터베이스 초기화 (테이블 생성)
 def init_db():
@@ -12,7 +12,7 @@ def init_db():
     cursor = conn.cursor()
     # 데이터 베이스 소통 명령어(소통객체)
 
-    # users 테이블 생성 (id, username, password, email)
+    # 1. users 테이블 생성 (id, username, password, email)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,6 +22,17 @@ def init_db():
         )
     ''')#유저네임에 unique (중복처리에 필요함)
     
+    # 2. 유저 별 상태를 저장할 테이블 새로 생성!
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recording_status (
+            id INTEGER PRIMARY KEY,
+            active_user TEXT,
+            is_recording INTEGER DEFAULT 0
+        )
+    ''')
+
+    # 3. 초기 상태값 삽입 (한 번만 실행됨)
+    cursor.execute("INSERT OR IGNORE INTO recording_status (id, active_user, is_recording) VALUES (1, NULL, 0)")
     conn.commit()
     # 작업 확정
 
@@ -78,6 +89,30 @@ def login(username, password):
         print("아이디 또는 비밀번호가 일치하지 않습니다.")
         return False
 
+def update_recording_status(username, status):
+    """
+    유저의 녹화 상태를 DB에 업데이트하는 함수
+    status: True(시작) / False(중지)
+    """
+    try:
+        conn = sqlite3.connect(DB_FILENAME)
+        cursor = conn.cursor()
+        
+        # True면 1, False면 0
+        is_rec = 1 if status else 0
+        
+        # 녹화 중지일 때는 active_user를 NULL로 변경
+        user_to_save = username if status else None
+
+        cursor.execute("UPDATE recording_status SET active_user = ?, is_recording = ? WHERE id = 1", 
+                       (user_to_save, is_rec))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"상태 업데이트 에러: {e}")
+        return False
 """테스트 코드
 if __name__ == "__main__":
     # DB 초기화 실행
