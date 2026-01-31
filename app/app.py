@@ -11,7 +11,7 @@ INFLUX_URL = "https://us-east-1-1.aws.cloud2.influxdata.com/"
 INFLUX_TOKEN = "2ajd0VIjjQWniBBz5m2SAyMeNW1ilKJgAQK4Mp21LXQuOmdDgfgYG4X6_XoA_bZzjGCxZux58DAQR9FT4Cgkug=="
 INFLUX_ORG = "personal project"
 INFLUX_BUCKET = "sleep_pulse"
-INFLUX_MEASUREMENT = "person1"
+INFLUX_MEASUREMENT = "sleep_sensor_data"
 
 # 세션 상태 초기화
 if 'is_logged_in' not in st.session_state:
@@ -53,7 +53,7 @@ def load_data():
         # person1 데이터 중 avg_... 로 시작하는 필드값들을 가져옵니다.
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
-          |> range(start: -30d)
+          |> range(start: -7h)
           |> filter(fn: (r) => r["_measurement"] == "{INFLUX_MEASUREMENT}")
           |> filter(fn: (r) => r["_field"] == "avg_movement" or r["_field"] == "avg_temperature" or r["_field"] == "avg_humidity" or r["_field"] == "avg_illuminance")
           |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
