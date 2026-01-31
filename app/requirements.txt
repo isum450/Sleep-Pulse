@@ -1,1 +1,5 @@
 streamlit
+influxdb-client
+certifi
+paho-mqtt
+python-dotenv
