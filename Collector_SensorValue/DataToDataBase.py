@@ -114,7 +114,7 @@ def on_message(client, userdata, msg):
                     avg_lux = int(statistics.mean(buffer_lux) / 4)
 
                     p = Point("sleep_sensor_data") \
-                        .tag("user", current_user) \
+                        .tag("user", current_active_user) \
                         .field("avg_temperature", avg_temp) \
                         .field("avg_humidity", avg_hum) \
                         .field("avg_movement", avg_motion) \
