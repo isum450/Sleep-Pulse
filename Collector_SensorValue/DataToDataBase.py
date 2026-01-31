@@ -7,7 +7,7 @@ import certifi
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-MQTT_BROKER = "broker.hivemq.com"
+MQTT_BROKER = "test.mosquitto.org"
 MQTT_SENSOR_TOPIC = "leesu/sensor/data"   # 센서 데이터 오는 곳
 MQTT_CONTROL_TOPIC = "sleep_pulse/control" # 시작/중지 명령 오는 곳
 

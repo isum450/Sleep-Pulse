@@ -15,7 +15,7 @@ INFLUX_ORG = "personal project"
 INFLUX_BUCKET = "sleep_pulse"
 INFLUX_MEASUREMENT = "sleep_sensor_data"
 
-BROKER = "broker.hivemq.com" # 예시 (본인이 쓰는 브로커 주소)
+BROKER = "test.mosquitto.org" # 예시 (본인이 쓰는 브로커 주소)
 PORT = 1883
 TOPIC_CONTROL = "sleep_pulse/control" # 명령을 주고받을 전용 채널
 
@@ -156,55 +156,13 @@ def main():
         if 'is_recording' not in st.session_state:
             st.session_state['is_recording'] = False
 
-        if st.button("▶️ 수집 시작"):
-            # 1. 버튼 눌림 확인 (화면에 무조건 떠야 함)
-            st.warning("⚠️ 버튼 눌림! 코드 실행 시작...")
-            print("LOG: 버튼 클릭됨 - 로직 진입")
-
-            try:
-                # 2. MQTT 연결 및 전송 시도
-                st.info("📡 MQTT 브로커 연결 시도 중...")
-                
-                # 브로커 정보 다시 확인
-                BROKER_ADDRESS = "test.mosquitto.org" # 혹은 "broker.hivemq.com"
-                PORT_NUMBER = 1883
-                
-                # 클라이언트 생성
-                try:
-                    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-                except AttributeError:
-                    client = mqtt.Client()
-                    
-                # 연결 (타임아웃 5초 설정 - 무한 대기 방지)
-                client.connect(BROKER_ADDRESS, PORT_NUMBER, keepalive=60)
-                
-                # 메시지 전송
-                msg = f"START:{st.session_state['username']}"
-                client.publish(TOPIC_CONTROL, msg)
-                client.disconnect()
-                
-                # 3. 성공 메시지
-                st.success(f"✅ 전송 완료: {msg}")
-                print(f"LOG: 전송 성공 - {msg}")
-                
-                # 상태 변경
-                st.session_state['is_recording'] = True
-                
-            except Exception as e:
-                # 에러가 나면 화면에 빨갛게 표시!
-                st.error(f"❌ 에러 발생: {e}")
-                print(f"LOG: 에러 발생 - {e}")
-
-            # [중요] 디버깅을 위해 st.rerun()을 잠시 끕니다!
-            # 메시지를 눈으로 확인해야 하니까요.
-            # st.rerun()
         # 녹화 중인지 아닌지에 따라 UI 다르게 보여주기
-        #if st.button("▶️ 수집 시작"):
+        if st.button("▶️ 수집 시작"):
             # 1. 화면 상태 변경
-            #st.session_state['is_recording'] = True
+            st.session_state['is_recording'] = True
             # 2. [변경] MQTT로 "시작해!" 명령 보내기
-            #send_command(st.session_state['username'], True)
-            #st.rerun()
+            send_command(st.session_state['username'], True)
+            st.rerun()
 
         if st.button("⏹️ 수집 중지"):
             st.session_state['is_recording'] = False
