@@ -18,7 +18,7 @@ INFLUX_BUCKET = "sleep_pulse"
 INFLUX_MEASUREMENT = "sleep_sensor_data"#measurement를 유저마다 생성하는 건 비효율적이라서 하나의 measuerement에 관리하는 것이 좋다고 함.
                     #측정 이름 여기서 바꿀수 있도록
 
-DB_PATH = r'C:/Users/leeso/source/repos/Sleep-Pulse/app/users.db'
+DB_PATH = 'https://wmytbsxolrrjkfneunvkp9.streamlit.app/'
 
 #버퍼
 buffer_hum = []
@@ -31,18 +31,11 @@ def get_active_user():
         #users.db 파일 경로 확인하기
         #다른 파일이면 경로 수정 필요함
         conn = sqlite3.connect(DB_PATH)
-        # 확인을 위해 로그 출력 (디버깅용)
-        print(f"📂 DB 읽는 중: {DB_PATH}")
+       
         c = conn.cursor()
         c.execute("SELECT active_user, is_recording FROM recording_status WHERE id = 1")
         row = c.fetchone()
         conn.close()
-
-        # DB에 뭐라고 적혀있는지 확인해보세요!
-        if row:
-            print(f"👀 DB 상태 확인: 유저={row[0]}, 녹화중={row[1]}")
-        else:
-            print("👀 DB 상태 확인: 데이터 없음 (row가 None)")
 
         if row and row[1] == 1:
             return row[0]
@@ -108,8 +101,7 @@ def on_message(client, userdata, msg):
                 
                 #DB에 작성(저장)    ,record=p > p를 전송
                 write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=p)
-                print(f"InfluxDB에 기록됨 -> 사용자: {current_user}, 온도: {avg_temp}, 습도: {avg_hum}, 움직임: {avg_motion}, 조도: {avg_lux}")
-
+                
             else:
                 print("기록 중인 유저가 없습니다. 데이터가 저장되지 않았습니다.")
             
