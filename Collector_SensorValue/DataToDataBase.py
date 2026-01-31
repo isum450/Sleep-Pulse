@@ -8,7 +8,8 @@ from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 MQTT_BROKER = "broker.hivemq.com"
-MQTT_TOPIC = "leesu/sensor/data"
+MQTT_SENSOR_TOPIC = "leesu/sensor/data"   # 센서 데이터 오는 곳
+MQTT_CONTROL_TOPIC = "sleep_pulse/control" # 시작/중지 명령 오는 곳
 
 #db 주소, 키비번, 이름 등등
 INFLUX_URL = "https://us-east-1-1.aws.cloud2.influxdata.com/"
@@ -26,24 +27,9 @@ buffer_temp = []
 buffer_lux = []
 buffer_motion = []
 
-def get_active_user():
-    try:
-        #users.db 파일 경로 확인하기
-        #다른 파일이면 경로 수정 필요함
-        conn = sqlite3.connect(DB_PATH)
-       
-        c = conn.cursor()
-        c.execute("SELECT active_user, is_recording FROM recording_status WHERE id = 1")
-        row = c.fetchone()
-        conn.close()
+current_active_user = None # 처음엔 아무도 없음
+is_recording = False
 
-        if row and row[1] == 1:
-            return row[0]
-        return None
-    except Exception as e:
-        print(f"Error accessing sqlite: {e}")
-        return None
-    
 #influxDB 클라이언트 설정
 try:
     db_client = InfluxDBClient(
@@ -60,61 +46,96 @@ except Exception as e:
     exit()
 
 def on_connect(client, userdata, flags, rc, properties=None):
-    print(f"Success Connection topic : {MQTT_TOPIC}")
-    client.subscribe(MQTT_TOPIC)
+    print("Connected with result code "+str(rc))
+    # 센서 데이터 채널 구독
+    client.subscribe(MQTT_SENSOR_TOPIC)   # 센서 데이터 구독
+    client.subscribe(MQTT_CONTROL_TOPIC)  # 제어 명령 구독
 
 def on_message(client, userdata, msg):
-    try:
-        payload = msg.payload.decode('utf-8')
-        data = json.loads(payload)
-        
-        m = float(data.get("motion", 0))
-        h = float(data.get("humidity", 0))
-        t = float(data.get("temperature", 0))
-        l = int(data.get("illuminance", 0))
-
-        buffer_motion.append(m)
-        buffer_hum.append(h)
-        buffer_temp.append(t)
-        buffer_lux.append(l)
-
-        #현재 버퍼 상태 출력
-        print(f"움직임{m}, 습도{h}%, 온도{t}, 조도{l}")
-
-
-        if len(buffer_hum) >= 30:
-            #30개가 모였을 때 유저가 누군지 확인한다.
-            current_user = get_active_user()
-            if current_user:
-                print(f"현재 기록 중인 유저: {current_user}")
-                avg_motion = round(statistics.mean(buffer_motion), 1)
-                avg_hum = round(statistics.mean(buffer_hum), 1)
-                avg_temp = round(statistics.mean(buffer_temp), 1)
-                avg_lux = int(statistics.mean(buffer_lux) / 4)
-
-                p = Point("sleep_sensor_data") \
-                    .tag("user", current_user) \
-                    .field("avg_temperature", avg_temp) \
-                    .field("avg_humidity", avg_hum) \
-                    .field("avg_movement", avg_motion) \
-                    .field("avg_illuminance", avg_lux)
-                
-                #DB에 작성(저장)    ,record=p > p를 전송
-                write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=p)
-                
-            else:
-                print("기록 중인 유저가 없습니다. 데이터가 저장되지 않았습니다.")
+    global current_active_user, is_recording
+    
+    topic = msg.topic
+    payload = msg.payload.decode('utf-8')
+    
+    # [Case A] 웹에서 명령이 왔을 때
+    if topic == MQTT_CONTROL_TOPIC:
+        if payload.startswith("START"):
+            # "START:leeso" 에서 이름만 잘라내기
+            user_name = payload.split(":")[1]
+            current_active_user = user_name
+            is_recording = True
+            # 버퍼 초기화 (새로운 녹화 시작이니까 비워줌)
+            buffer_motion.clear()
+            buffer_hum.clear()
+            buffer_temp.clear()
+            buffer_lux.clear()
+            print(f"🔔 명령 수신: {user_name}님 녹화 시작!")
             
-            #버퍼 비우기
+        elif payload == "STOP":
+            current_active_user = None
+            is_recording = False
+            # 남은 데이터 버퍼도 비워줌
             buffer_motion.clear()
             buffer_hum.clear()
             buffer_temp.clear()
             buffer_lux.clear()
 
-    except json.JSONDecodeError:
-        print(f"에러: 들어온 데이터가 JSON이 아닙니다 -> {payload}")
-    except Exception as e:
-        print(f"에러 발생: {e}")
+            print("🔕 명령 수신: 녹화 중지.")
+
+    # [Case B] 센서 데이터가 왔을 때 (원래 로직)
+    elif topic == MQTT_SENSOR_TOPIC: # 본인 센서 토픽
+        if not is_recording:
+            # print("대기 중... (데이터 수신됨)") # 너무 시끄러우면 주석 처리
+            return
+
+        try:
+            data = json.loads(payload)
+            
+            m = float(data.get("motion", 0))
+            h = float(data.get("humidity", 0))
+            t = float(data.get("temperature", 0))
+            l = int(data.get("illuminance", 0))
+
+            buffer_motion.append(m)
+            buffer_hum.append(h)
+            buffer_temp.append(t)
+            buffer_lux.append(l)
+
+            #현재 버퍼 상태 출력
+            print(f"   데이터 수집 중 ({len(buffer_hum)}/30) - {current_active_user}")
+
+
+            if len(buffer_hum) >= 30:
+                #30개가 모였을 때 저장
+                if len(buffer_hum) >= 30:
+                    avg_motion = round(statistics.mean(buffer_motion), 1)
+                    avg_hum = round(statistics.mean(buffer_hum), 1)
+                    avg_temp = round(statistics.mean(buffer_temp), 1)
+                    avg_lux = int(statistics.mean(buffer_lux) / 4)
+
+                    p = Point("sleep_sensor_data") \
+                        .tag("user", current_user) \
+                        .field("avg_temperature", avg_temp) \
+                        .field("avg_humidity", avg_hum) \
+                        .field("avg_movement", avg_motion) \
+                        .field("avg_illuminance", avg_lux)
+                    
+                    #DB에 작성(저장)    ,record=p > p를 전송
+                    write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=p)
+                    
+                else:
+                    print("기록 중인 유저가 없습니다. 데이터가 저장되지 않았습니다.")
+                
+                #버퍼 비우기
+                buffer_motion.clear()
+                buffer_hum.clear()
+                buffer_temp.clear()
+                buffer_lux.clear()
+
+        except json.JSONDecodeError:
+            print(f"에러: 들어온 데이터가 JSON이 아닙니다 -> {payload}")
+        except Exception as e:
+            print(f"에러 발생: {e}")
 
 
 try:

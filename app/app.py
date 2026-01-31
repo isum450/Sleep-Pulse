@@ -2,6 +2,8 @@ import streamlit as st
 import user_manager as db
 import pandas as pd
 from influxdb_client import InfluxDBClient
+import paho.mqtt.client as mqtt
+
 
 # 페이지 설정 (브라우저 탭 이름 등)
 st.set_page_config(page_title="SLEEP PULSE", layout="wide") 
@@ -12,6 +14,10 @@ INFLUX_TOKEN = "2ajd0VIjjQWniBBz5m2SAyMeNW1ilKJgAQK4Mp21LXQuOmdDgfgYG4X6_XoA_bZz
 INFLUX_ORG = "personal project"
 INFLUX_BUCKET = "sleep_pulse"
 INFLUX_MEASUREMENT = "sleep_sensor_data"
+
+BROKER = "broker.hivemq.com" # 예시 (본인이 쓰는 브로커 주소)
+PORT = 1883
+TOPIC_CONTROL = "sleep_pulse/control" # 명령을 주고받을 전용 채널
 
 # 세션 상태 초기화
 if 'is_logged_in' not in st.session_state:
@@ -76,6 +82,24 @@ def load_data():
         st.error(f"데이터 연결 오류: {e}")
         return None
 
+def send_command(user, status):
+    """
+    MQTT로 녹화 시작/중지 명령을 보내는 함수
+    status: True(시작) / False(중지)
+    """
+    client = mqtt.Client()
+    client.connect(BROKER, PORT)
+    
+    if status:
+        # 메시지 예시: "START:leeso"
+        msg = f"START:{user}"
+    else:
+        # 메시지 예시: "STOP"
+        msg = "STOP"
+        
+    client.publish(TOPIC_CONTROL, msg)
+    client.disconnect()
+
 # 메인 함수
 def main():
     if st.session_state['is_logged_in']:
@@ -121,24 +145,18 @@ def main():
             st.session_state['is_recording'] = False
 
         # 녹화 중인지 아닌지에 따라 UI 다르게 보여주기
-        if st.session_state['is_recording']:
-            st.success(f"현재 '{st.session_state['username']}'님의 데이터를 수집 중입니다... ")
-            
-            if st.button("⏹️ 수집 중지"):
-                # 1. DB 업데이트 (user_manager 함수 사용!)
-                db.update_recording_status(st.session_state['username'], False)
-                # 2. 화면 상태 변경
-                st.session_state['is_recording'] = False
-                st.rerun()
-        else:
-            st.info("데이터 수집을 시작하려면 버튼을 누르세요.")
-            
-            if st.button("▶️ 수집 시작"):
-                # 1. DB 업데이트 (user_manager 함수 사용!)
-                db.update_recording_status(st.session_state['username'], True)
-                # 2. 화면 상태 변경
-                st.session_state['is_recording'] = True
-                st.rerun()
+        if st.button("▶️ 수집 시작"):
+            # 1. 화면 상태 변경
+            st.session_state['is_recording'] = True
+            # 2. [변경] MQTT로 "시작해!" 명령 보내기
+            send_command(st.session_state['username'], True)
+            st.rerun()
+
+        if st.button("⏹️ 수집 중지"):
+            st.session_state['is_recording'] = False
+            # [변경] MQTT로 "멈춰!" 명령 보내기
+            send_command(None, False)
+            st.rerun()
 
 
        # 화면 1: 메인 옵션 메뉴 (로그인 직후 화면)
