@@ -79,7 +79,24 @@ def load_data():
 # 메인 함수
 def main():
     if st.session_state['is_logged_in']:
-        
+        if st.session_state['username'] == 'admin':
+            st.divider() # 구분선
+            st.subheader("👑 관리자 메뉴 (유저 목록)")
+            
+            # DB 내용을 가져와서 화면에 보여주기
+            import sqlite3
+            import pandas as pd
+            
+            # user_manager.py에 있는 경로가 아니라, 현재 실행 위치의 db를 읽어야 함
+            # (주의: user_manager를 통해서 가져오는 게 제일 좋지만, 임시로 직접 읽음)
+            try:
+                # DB 연결 (경로는 상황에 맞게 수정 필요, 보통 같은 폴더면 그냥 파일명)
+                con = sqlite3.connect('users.db') 
+                df = pd.read_sql_query("SELECT * FROM users", con)
+                st.dataframe(df) # 데이터프레임(표)으로 보여주기
+                con.close()
+            except Exception as e:
+                st.error(f"DB 읽기 실패: {e}")
         # 사이드바(메뉴)
         with st.sidebar:
             st.title(f"{st.session_state['username']}님")
