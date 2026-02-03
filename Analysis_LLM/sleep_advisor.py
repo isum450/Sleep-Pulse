@@ -1,0 +1,97 @@
+# Analysis_LLM/sleep_advisor.py
+#influx DB에서 데이터를 꺼내와서 LLM에게 질문하고 답변을 받아오는 역할을 한다.
+
+import os
+import json
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
+
+if api_key:
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+
+def analyze_sleep_data(sensor_summary):
+    """
+    sensor_summary: { 'avg_temp': 24.5, 'avg_humid': 50, 'avg_move': 100 ... }
+    LLM에게 통계 데이터를 주고 점수(0~100)와 피드백을 받아옵니다.
+    """
+    if not api_key:
+        return 0, "API 키가 설정되지 않아 분석할 수 없습니다."
+
+    # 프롬프트: 명확하게 JSON 출력을 요구합니다.
+    prompt = f"""
+    당신은 수면 환경 분석 전문가입니다. 아래 측정된 센서 데이터를 기반으로 수면 점수(0~100점)를 매기고 조언을 해주세요.
+
+    [측정 데이터]
+    - 평균 움직임(Movement): {sensor_summary.get('avg_movement', 0):.1f} (높으면 뒤척임 많음, 낮을수록 좋음)
+    - 평균 온도: {sensor_summary.get('avg_temperature', 0):.1f}°C (적정: 20~24°C)
+    - 평균 습도: {sensor_summary.get('avg_humidity', 0):.1f}% (적정: 40~60%)
+    - 평균 조도: {sensor_summary.get('avg_illuminance', 0):.1f} lux (어두울수록 좋음)
+    - 수면 시간: {sensor_summary.get('duration', '알수없음')}
+
+    [지시사항]
+    1. 위 데이터를 종합하여 100점 만점으로 점수를 매기세요.
+    2. 온도, 습도, 조도가 적정 범위를 벗어나거나 움직임이 많으면 점수를 깎으세요.
+    3. 결과는 반드시 **JSON 형식**으로만 출력하세요. 다른 말은 하지 마세요.
+    
+    [출력 예시]
+    {{
+        "score": 85,
+        "feedback": "온도는 적절했으나 습도가 조금 높았습니다. 제습기를 켜보세요."
+    }}
+    """
+
+    try:
+        response = model.generate_content(prompt)
+        text_res = response.text.replace("```json", "").replace("```", "").strip() # 마크다운 제거
+        
+        # JSON 파싱
+        result_json = json.loads(text_res)
+        
+        return result_json['score'], result_json['feedback']
+        
+    except Exception as e:
+        return 50, f"분석 중 오류 발생: {str(e)}"
+    
+def get_chat_response(user_question, context_data=None):
+    """
+    user_question: 사용자의 질문
+    context_data: (선택) 최근 수면 데이터 요약본 (문자열)
+    """
+    
+    # 1. AI에게 줄 페르소나(역할) 설정
+    system_instruction = "당신은 친절하고 전문적인 '수면 코치'입니다. 사용자의 질문에 대해 수면 건강 관점에서 도움이 되는 조언을 해주세요."
+    
+    # 2. 만약 최근 수면 데이터가 있다면 프롬프트에 포함 (문맥 주입)
+    if context_data:
+        prompt = f"""
+        [시스템 지시]
+        {system_instruction}
+        
+        [사용자의 최근 수면 데이터]
+        {context_data}
+        
+        [사용자 질문]
+        "{user_question}"
+        
+        위 데이터를 참고하여 사용자의 질문에 답변해주세요.
+        """
+    else:
+        # 데이터가 없으면 일반적인 질문으로 처리
+        prompt = f"""
+        [시스템 지시]
+        {system_instruction}
+        
+        [사용자 질문]
+        "{user_question}"
+        """
+
+    try:
+        # 3. 제미나이에게 질문
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"죄송합니다. AI 연결 중 오류가 발생했습니다: {str(e)}"

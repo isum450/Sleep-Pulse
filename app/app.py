@@ -3,6 +3,9 @@ import user_manager as db
 import pandas as pd
 from influxdb_client import InfluxDBClient
 import paho.mqtt.client as mqtt
+import time
+from datetime import datetime, timedelta
+import Analysis_LLM.sleep_advisor as advisor
 
 # 페이지 설정 (브라우저 탭 이름 등)
 st.set_page_config(page_title="SLEEP PULSE", layout="wide") 
@@ -35,6 +38,10 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "assistant", "content": "안녕하세요! 수면 데이터 분석 AI입니다. 무엇을 도와드릴까요?"}
 ]
+
+#시간 저장용 변수
+if 'recording_start_dt' not in st.session_state:
+    st.session_state['recording_start_dt'] = None
 
 def send_mqtt_command(command):
     try:
@@ -69,11 +76,11 @@ def load_data():
 
         target_name = st.session_state['username']
 
-        # Flux 쿼리: 최근 6시간 데이터 조회
+        # Flux 쿼리: 최근 8시간 데이터 조회
         # person1 데이터 중 avg_... 로 시작하는 필드값들을 가져옵니다.
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
-          |> range(start: -7h)
+          |> range(start: -8h)
           |> filter(fn: (r) => r["_measurement"] == "{INFLUX_MEASUREMENT}")
           |> filter(fn: (r) => r["user"] == "{target_name}") 
           |> filter(fn: (r) => r["_field"] == "avg_movement" or r["_field"] == "avg_temperature" or r["_field"] == "avg_humidity" or r["_field"] == "avg_illuminance")
@@ -96,6 +103,34 @@ def load_data():
     except Exception as e:
         st.error(f"데이터 연결 오류: {e}")
         return None
+
+def save_sleep_session(duration_str, start_dt, end_dt):
+    # 1. InfluxDB에서 최근 데이터를 가져와서 '통계'를 냅니다.
+    # (이미 load_data() 함수가 있으므로 그걸 활용하거나 다시 호출)
+    df = load_data() 
+    
+    if df is not None and not df.empty:
+        # 데이터프레임에서 평균값 계산 (이게 LLM에게 보낼 요약본이 됩니다)
+        summary = {
+            "avg_movement": df['avg_movement'].mean(),
+            "avg_temperature": df['avg_temperature'].mean(),
+            "avg_humidity": df['avg_humidity'].mean(),
+            "avg_illuminance": df['avg_illuminance'].mean(),
+            "duration": duration_str
+        }
+    else:
+        # 데이터가 없을 경우 기본값 (에러 방지)
+        summary = {"avg_movement": 0, "avg_temperature": 0, "avg_humidity": 0, "avg_illuminance": 0, "duration": duration_str}
+
+    # 2. LLM에게 분석 요청 (점수랑 피드백 받아오기)
+    with st.spinner("AI가 수면 데이터를 분석하고 점수를 매기는 중입니다..."):
+        score, feedback = advisor.analyze_sleep_data(summary)
+
+    # 3. DB에 영구 저장 (user_manager 업데이트 필요)
+    summary_str = str(summary) # 통계 데이터도 문자열로 백업
+    db.save_sleep_result(st.session_state['user_id'], score, feedback, summary_str)
+    
+    st.toast(f"분석 완료! 점수: {score}점", icon="🎉")
 
 # 메인 함수
 def main():
@@ -140,12 +175,30 @@ def main():
         if 'is_recording' not in st.session_state:
             st.session_state['is_recording'] = False
 
+        
         # 녹화 중인지 아닌지에 따라 UI 다르게 보여주기
         if st.session_state['is_recording']:
             st.success(f"현재 '{st.session_state['username']}'님의 데이터를 수집 중입니다... ")
             
+            if st.session_state['recording_start_dt']:
+                elapsed = datetime.now() - st.session_state['recording_start_dt']
+                # 보기 좋게 시:분:초로 자름
+                elapsed_str = str(elapsed).split('.')[0] 
+                st.success(f"데이터 수집 중... (경과 시간: {elapsed_str})")
+            else:
+                st.success(f"데이터 수집 중...")
+
             if st.button("⏹️ 수집 중지"):
                 # 1. DB 업데이트 (user_manager 함수 사용!)
+                end_dt = datetime.now()
+                start_dt = st.session_state['recording_start_dt']
+                
+                duration_str = "알 수 없음"
+
+                if start_dt:
+                    total_duration = end_dt - start_dt
+                    duration_str = str(total_duration).split('.')[0]
+                
                 send_mqtt_command("STOP")
                 db.update_recording_status(st.session_state['username'], False)
                 # 2. 화면 상태 변경
@@ -155,7 +208,10 @@ def main():
             st.info("데이터 수집을 시작하려면 버튼을 누르세요.")
             
             if st.button("▶️ 수집 시작"):
-                # 센서에게 '이름'을 보냅니다.
+                # 1. 시작 시간 기록 (datetime 객체 사용)
+                now = datetime.now()
+                st.session_state['recording_start_dt'] = now
+                
                 my_name = st.session_state['username']
                 send_mqtt_command(f"START:{my_name}")
                 
@@ -185,7 +241,7 @@ def main():
                     st.write("") # 버튼 사이 간격
                     
                     # 2. 시간별 그래프 버튼
-                    if st.button("2. 시간별 그래프", use_container_width=True):
+                    if st.button("2. 시간별 그래프 (최근 8시간)", use_container_width=True):
                         st.session_state['current_view'] = 'graph'
                         st.rerun()
                         
@@ -201,19 +257,36 @@ def main():
             if st.button("메인으로"):
                 go_to_main()
             
-            st.subheader("오늘의 수면 분석")
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                with st.container(border=True):
-                    st.markdown(" AI 분석 리포트")
-                    st.info("전날 대비 깊은 수면이 **30분 증가**했습니다! 아주 좋은 신호입니다.")
-                    st.write("- **수면 효율:** 92% (매우 좋음)")
-                    st.write("- **뒤척임 횟수:** 12회 (정상)")
-            with col2:
-                with st.container(border=True):
-                    st.markdown("종합 점수")
-                    st.markdown("<h1 style='text-align: center; color: #4CAF50; font-size: 60px;'>88점</h1>", unsafe_allow_html=True)
+            st.subheader("지난 수면 분석 결과")
+            
+            # DB에서 가장 최근 기록 가져오기
+            last_result = db.get_last_sleep_result(st.session_state['user_id'])
 
+            if last_result:
+                #가장 최근에 저장된 점수를 불러와야 함.
+
+                db_score = last_result[0]
+                db_feedback = last_result[1]
+                db_time = last_result[2]
+
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    with st.container(border=True):
+                        st.markdown(f"### 💡 AI 분석 리포트 ({db_time} 기준)")
+                        st.info(db_feedback) # LLM이 해준 조언 출력
+                        
+                with col2:
+                    with st.container(border=True):
+                        st.markdown("### 종합 점수")
+                        
+                        # 점수에 따라 색상 변경
+                        color = "#4CAF50" # 초록(좋음)
+                        if db_score < 70: color = "#FFA500" # 주황(보통)
+                        if db_score < 50: color = "#FF4B4B" # 빨강(나쁨)
+                            
+                        st.markdown(f"<h1 style='text-align: center; color: {color}; font-size: 70px;'>{db_score}점</h1>", unsafe_allow_html=True)
+            else:
+                st.warning("아직 저장된 수면 데이터가 없습니다. 먼저 데이터 수집을 진행해주세요!")
         # 화면 3: 시간별 그래프 
         elif st.session_state['current_view'] == 'graph':
             if st.button("메인으로"):
@@ -269,7 +342,8 @@ def main():
                 go_to_main()
 
             st.subheader("AI 수면 코치")
-            
+            st.caption("궁금한 점을 물어보세요! (예: 오늘 내 수면 점수가 왜 낮아? / 잠 잘 오는 법 알려줘)")
+
             # 대화 기록 표시
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
@@ -281,10 +355,27 @@ def main():
                 with st.chat_message("user"):
                     st.write(prompt)
                 
-                response = f"'{prompt}'에 대한 답변 준비 중..."
-                st.session_state.messages.append({"role": "assistant", "content": response})
+                # 3. 답변 생성 (DB에서 최근 데이터 가져와서 같이 보내기)
                 with st.chat_message("assistant"):
-                    st.write(response)
+                    with st.spinner("AI가 수면 기록을 분석하고 생각 중입니다..."):
+                        
+                        # (1) 최근 수면 데이터 조회 (문맥 파악용)
+                        last_sleep_info = db.get_last_sleep_result(st.session_state['user_id'])
+                        context_str = None
+                        
+                        if last_sleep_info:
+                            # DB에서 가져온 summary_data (문자열) 활용
+                            # last_sleep_info 구조: (score, feedback, timestamp, summary_data)
+                            context_str = f"최근 측정 일시: {last_sleep_info[2]}, 요약 데이터: {last_sleep_info[3]}"
+                        
+                        # (2) 질문 + 데이터 보내서 답변 받기
+                        response_text = advisor.get_chat_response(prompt, context_data=context_str)
+                        
+                        # (3) 화면에 출력
+                        st.write(response_text)
+                
+                # 4. 대화 기록에 저장
+                st.session_state.messages.append({"role": "assistant", "content": response_text})
 
     # 비로그인 상태일 때 화면
     else:

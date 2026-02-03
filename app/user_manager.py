@@ -32,6 +32,17 @@ def init_db():
         )
     ''')
 
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sleep_history(
+            idx INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            timestamp TEXT,
+            score INTEGER,
+            feedback TEXT,
+            summary_data TEXT
+        )               
+    ''')
+
     # 3. 초기 상태값 삽입 (한 번만 실행됨)
     cursor.execute("INSERT OR IGNORE INTO recording_status (idx, active_username, is_recording) VALUES (1, NULL, 0)")
     conn.commit()
@@ -39,6 +50,29 @@ def init_db():
 
     conn.close()
     # 연결끊고 파일 닫기 열었으면 무조건 닫아야함
+
+
+# 수면 분석 결과 저장 함수
+def save_sleep_result(user_id, score, feedback, summary_str):
+    conn = sqlite3.connect(DB_FILENAME)
+    c = conn.cursor()
+    import datetime
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    c.execute("INSERT INTO sleep_history (user_id, timestamp, score, feedback, summary_data) VALUES (?, ?, ?, ?, ?)",
+              (user_id, now, score, feedback, summary_str))
+    conn.commit()
+    conn.close()
+
+# 가장 최근 수면 기록 가져오기
+def get_last_sleep_result(user_id):
+    conn = sqlite3.connect(DB_FILENAME)
+    c = conn.cursor()
+    c.execute("SELECT score, feedback, timestamp, summary_data FROM sleep_history WHERE user_id = ? ORDER BY idx DESC LIMIT 1", (user_id,))
+    result = c.fetchone()
+    conn.close()
+    return result # (score, feedback, timestamp, summary_data) 튜플 반환
+
 
 # 비밀번호 암호화 (SHA-256 알고리즘)
 def hash_password(password):

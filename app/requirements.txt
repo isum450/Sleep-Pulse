@@ -1,5 +1,8 @@
 streamlit
+pandas
 influxdb-client
-certifi
 paho-mqtt
 python-dotenv
+google-generativeai
+SQLAlchemy
+psycopg2-binary
