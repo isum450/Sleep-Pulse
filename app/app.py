@@ -4,7 +4,6 @@ import pandas as pd
 from influxdb_client import InfluxDBClient
 import paho.mqtt.client as mqtt
 
-
 # 페이지 설정 (브라우저 탭 이름 등)
 st.set_page_config(page_title="SLEEP PULSE", layout="wide") 
 
@@ -15,14 +14,14 @@ INFLUX_ORG = "personal project"
 INFLUX_BUCKET = "sleep_pulse"
 INFLUX_MEASUREMENT = "sleep_sensor_data"
 
-BROKER = "broker.emqx.io" # 예시 (본인이 쓰는 브로커 주소)
-PORT = 1883
-TOPIC_CONTROL = "sleep_pulse/control" # 명령을 주고받을 전용 채널
+MQTT_BROKER = "broker.emqx.io"
+MQTT_CONTROL_TOPIC = "sleep_pulse/control"
 
 # 세션 상태 초기화
 if 'is_logged_in' not in st.session_state:
     st.session_state['is_logged_in'] = False
-    st.session_state['username'] = None
+    st.session_state['user_id'] = None   # 로그인용 아이디
+    st.session_state['username'] = None  # 태그/표시용 이름
 #로그인한 후 화면을 새로고침했을떄 로그인이 풀리는걸 방지하기 위한 로그인 여부 저장장치 
 #웹사이트를 처음들어왔을때 실행되고 이제 로그인하면 TURE로 바꾸는 형식
 #username은 고유 사용자 특정을 위함
@@ -37,9 +36,22 @@ if "messages" not in st.session_state:
         {"role": "assistant", "content": "안녕하세요! 수면 데이터 분석 AI입니다. 무엇을 도와드릴까요?"}
 ]
 
+def send_mqtt_command(command):
+    try:
+        try:
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        except AttributeError:
+            client = mqtt.Client()
+        client.connect(MQTT_BROKER, 1883, 60)
+        client.publish(MQTT_CONTROL_TOPIC, command)
+        client.disconnect()
+    except Exception as e:
+        st.error(f"명령 전송 실패: {e}")
+
 # 로그아웃 함수 (리셋)
 def logout():
     st.session_state['is_logged_in'] = False
+    st.session_state['user_id'] = None
     st.session_state['username'] = None
     st.session_state.messages = [] # 로그아웃 시 채팅 기록 초기화
     st.rerun()  #새로고침
@@ -55,12 +67,15 @@ def load_data():
         client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
         query_api = client.query_api()
 
+        target_name = st.session_state['username']
+
         # Flux 쿼리: 최근 6시간 데이터 조회
         # person1 데이터 중 avg_... 로 시작하는 필드값들을 가져옵니다.
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
           |> range(start: -7h)
           |> filter(fn: (r) => r["_measurement"] == "{INFLUX_MEASUREMENT}")
+          |> filter(fn: (r) => r["user"] == "{target_name}") 
           |> filter(fn: (r) => r["_field"] == "avg_movement" or r["_field"] == "avg_temperature" or r["_field"] == "avg_humidity" or r["_field"] == "avg_illuminance")
           |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
           |> sort(columns: ["_time"], desc: false)
@@ -81,43 +96,13 @@ def load_data():
     except Exception as e:
         st.error(f"데이터 연결 오류: {e}")
         return None
-# MQTT로 명령 전송 함수
-def send_command(user, status):
-    try:
-        # 1. 클라이언트 생성 (Paho v2 대응)
-        try:
-            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-        except AttributeError:
-            client = mqtt.Client()
-            
-        # 2. 브로커 연결 (DataToDataBase.py랑 똑같은 주소여야 함!)
-        # "broker.hivemq.com" 인지 꼭 확인하세요.
-        client.connect(BROKER, PORT)
-        
-        # 3. 메시지 만들기
-        if status:
-            msg = f"START:{user}"
-        else:
-            msg = "STOP"
-            
-        # 4. 전송 (Publish)
-        info = client.publish(TOPIC_CONTROL, msg)
-        
-        # [중요] 메시지가 갈 때까지 잠깐 기다려줌 (안전장치)
-        info.wait_for_publish() 
-        
-        client.disconnect()
-        print(f"전송 성공: {msg}") # Streamlit 로그에 찍힘
-        
-    except Exception as e:
-        print(f"MQTT 전송 에러: {e}")
 
 # 메인 함수
 def main():
     if st.session_state['is_logged_in']:
         if st.session_state['username'] == 'admin':
             st.divider() # 구분선
-            st.subheader("👑 관리자 메뉴 (유저 목록)")
+            st.subheader("관리자 메뉴 (유저 목록)")
             
             # DB 내용을 가져와서 화면에 보여주기
             import sqlite3
@@ -133,9 +118,12 @@ def main():
                 con.close()
             except Exception as e:
                 st.error(f"DB 읽기 실패: {e}")
+            st.divider()
+
         # 사이드바(메뉴)
         with st.sidebar:
-            st.title(f"{st.session_state['username']}님")
+            st.title(f"{st.session_state['username']}님") # 이름 표시
+            st.caption(f"ID: {st.session_state['user_id']}") # 아이디 작게 표시
             st.write("반갑습니다!")
             st.divider()
             if st.button("홈", use_container_width=True):
@@ -145,31 +133,35 @@ def main():
             st.divider()
             if st.button("로그아웃", type="primary"):
                 logout()
-        if st.sidebar.button("로그아웃"):
-            logout()
-            
-        st.title("수면 데이터 분석")
-
-        # --- 수집 제어 버튼 ---
-        st.subheader("📡 데이터 수집 제어")
+       
+        
+        st.subheader("데이터 수집 제어")
 
         if 'is_recording' not in st.session_state:
             st.session_state['is_recording'] = False
 
         # 녹화 중인지 아닌지에 따라 UI 다르게 보여주기
-        if st.button("▶️ 수집 시작"):
-            # 1. 화면 상태 변경
-            st.session_state['is_recording'] = True
-            # 2. [변경] MQTT로 "시작해!" 명령 보내기
-            send_command(st.session_state['username'], True)
-            st.rerun()
-
-        if st.button("⏹️ 수집 중지"):
-            st.session_state['is_recording'] = False
-            # [변경] MQTT로 "멈춰!" 명령 보내기
-            send_command(None, False)
-            st.rerun()
-
+        if st.session_state['is_recording']:
+            st.success(f"현재 '{st.session_state['username']}'님의 데이터를 수집 중입니다... ")
+            
+            if st.button("⏹️ 수집 중지"):
+                # 1. DB 업데이트 (user_manager 함수 사용!)
+                send_mqtt_command("STOP")
+                db.update_recording_status(st.session_state['username'], False)
+                # 2. 화면 상태 변경
+                st.session_state['is_recording'] = False
+                st.rerun()
+        else:
+            st.info("데이터 수집을 시작하려면 버튼을 누르세요.")
+            
+            if st.button("▶️ 수집 시작"):
+                # 센서에게 '이름'을 보냅니다.
+                my_name = st.session_state['username']
+                send_mqtt_command(f"START:{my_name}")
+                
+                db.update_recording_status(my_name, True)
+                st.session_state['is_recording'] = True
+                st.rerun()
 
        # 화면 1: 메인 옵션 메뉴 (로그인 직후 화면)
         if st.session_state['current_view'] == 'menu':
@@ -309,7 +301,9 @@ def main():
             if st.button("로그인"):
                 if db.login(login_id, login_pw):
                     st.session_state['is_logged_in'] = True
-                    st.session_state['username'] = login_id
+                    st.session_state['user_id'] = login_id
+                    real_name = db.get_username(login_id)
+                    st.session_state['username'] = real_name if real_name else login_id
                     st.rerun()
                 else:
                     st.error("아이디 또는 비밀번호가 일치하지 않습니다.")
@@ -318,16 +312,17 @@ def main():
         with tab2:
             st.subheader("회원가입")
             new_id = st.text_input("새 아이디", key="new_id")
+            new_username = st.text_input("사용할 이름/닉네임", key="new_username")
             new_pw = st.text_input("새 비밀번호", type="password", key="new_pw")
             new_pw_check = st.text_input("비밀번호 확인", type="password", key="new_pw_check")
             new_email = st.text_input("이메일", key="new_email")
             
             if st.button("가입하기"):
                 # 1. 모든 칸이 채워져 있는지 확인
-                if new_id and new_pw and new_pw_check:
+                if new_id and new_username and new_pw:
                     # 2. 비밀번호와 확인 비밀번호가 같은지 확인
                     if new_pw == new_pw_check:
-                        if db.signup(new_id, new_pw, new_email):
+                        if db.signup(new_id, new_pw, new_email, new_username):
                             st.success("회원가입 성공. 로그인 탭에서 로그인해주세요.")
                         else:
                             st.error("이미 존재하는 아이디입니다.")
