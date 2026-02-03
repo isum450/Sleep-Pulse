@@ -108,29 +108,45 @@ def load_data():
         return None
 
 def save_sleep_session(duration_str, start_dt, end_dt):
-    # 1. InfluxDB에서 최근 데이터를 가져와서 '통계'를 냅니다.
-    # (이미 load_data() 함수가 있으므로 그걸 활용하거나 다시 호출)
+    # 1. 일단 넉넉하게 최근 데이터를 가져옵니다.
     df = load_data() 
     
     if df is not None and not df.empty:
-        # 데이터프레임에서 평균값 계산 (이게 LLM에게 보낼 요약본이 됩니다)
+        # [핵심 수정] 가져온 데이터 중에서 '녹화 시작 시간(start_dt)' 이후의 데이터만 남깁니다.
+        # (이전 8시간 데이터가 섞이는 것을 방지)
+        
+        # start_dt가 타임존 정보가 없을 수 있어 맞춰주는 작업 (에러 방지용)
+        try:
+            # df 인덱스가 UTC일 수 있으므로 비교를 위해 시간대 제거 혹은 맞춤
+            # 가장 단순한 방법: 문자열로 변환해서 비교하거나, 그냥 필터링
+            df = df[df.index >= pd.to_datetime(start_dt).tz_localize(None).tz_localize('UTC')]
+        except:
+            # 타임존 처리가 복잡하면, 그냥 개수로 대략 자르거나 전체 사용
+            pass
+
+        # 데이터가 필터링 후에도 남아있는지 확인
+        if df.empty:
+             st.warning("수집된 데이터가 너무 적어 분석할 수 없습니다.")
+             return
+
+        # 평균값 계산 (이제 녹화된 구간만의 평균입니다!)
         summary = {
-            "avg_movement": df['avg_movement'].mean(),
-            "avg_temperature": df['avg_temperature'].mean(),
-            "avg_humidity": df['avg_humidity'].mean(),
-            "avg_illuminance": df['avg_illuminance'].mean(),
-            "duration": duration_str
+            "avg_movement": float(df['avg_movement'].mean()),
+            "avg_temperature": float(df['avg_temperature'].mean()),
+            "avg_humidity": float(df['avg_humidity'].mean()),
+            "avg_illuminance": float(df['avg_illuminance'].mean()),
+            "duration": duration_str # "01:30:00" 같은 문자열
         }
     else:
-        # 데이터가 없을 경우 기본값 (에러 방지)
-        summary = {"avg_movement": 0, "avg_temperature": 0, "avg_humidity": 0, "avg_illuminance": 0, "duration": duration_str}
+        st.warning("저장된 데이터가 없습니다.")
+        return
 
-    # 2. LLM에게 분석 요청 (점수랑 피드백 받아오기)
-    with st.spinner("AI가 수면 데이터를 분석하고 점수를 매기는 중입니다..."):
+    # 2. LLM에게 분석 요청
+    with st.spinner("AI가 수면 데이터를 분석 중입니다..."):
         score, feedback = advisor.analyze_sleep_data(summary)
 
-    # 3. DB에 영구 저장 (user_manager 업데이트 필요)
-    summary_str = str(summary) # 통계 데이터도 문자열로 백업
+    # 3. 결과 저장
+    summary_str = str(summary)
     db.save_sleep_result(st.session_state['user_id'], score, feedback, summary_str)
     
     st.toast(f"분석 완료! 점수: {score}점", icon="🎉")

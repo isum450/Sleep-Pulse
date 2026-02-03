@@ -11,7 +11,7 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 if api_key:
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 def analyze_sleep_data(sensor_summary):
     """
@@ -26,21 +26,22 @@ def analyze_sleep_data(sensor_summary):
     당신은 수면 환경 분석 전문가입니다. 아래 측정된 센서 데이터를 기반으로 수면 점수(0~100점)를 매기고 조언을 해주세요.
 
     [측정 데이터]
-    - 평균 움직임(Movement): {sensor_summary.get('avg_movement', 0):.1f} (높으면 뒤척임 많음, 낮을수록 좋음)
-    - 평균 온도: {sensor_summary.get('avg_temperature', 0):.1f}°C (적정: 20~24°C)
-    - 평균 습도: {sensor_summary.get('avg_humidity', 0):.1f}% (적정: 40~60%)
-    - 평균 조도: {sensor_summary.get('avg_illuminance', 0):.1f} lux (어두울수록 좋음)
-    - 수면 시간: {sensor_summary.get('duration', '알수없음')}
+    - 평균 움직임: {sensor_summary.get('avg_movement', 0):.1f}
+    - 평균 온도: {sensor_summary.get('avg_temperature', 0):.1f}도
+    - 평균 습도: {sensor_summary.get('avg_humidity', 0):.1f}%
+    - 평균 조도: {sensor_summary.get('avg_illuminance', 0):.1f} lux
+    - 실제 수면 시간: {sensor_summary.get('duration', '알수없음')}
 
-    [지시사항]
-    1. 위 데이터를 종합하여 100점 만점으로 점수를 매기세요.
-    2. 온도, 습도, 조도가 적정 범위를 벗어나거나 움직임이 많으면 점수를 깎으세요.
-    3. 결과는 반드시 **JSON 형식**으로만 출력하세요. 다른 말은 하지 마세요.
-    
+    [채점 기준 및 지시사항]
+    1. **중요: 수면 시간이 8시간이 안 되더라도, 감점하지 마세요.** ("짧게 잤지만 꿀잠을 잤다"면 높은 점수를 주세요.)
+    2. 오직 **'수면의 질(Quality)'** 에 집중하세요. (온도, 습도, 움직임 안정성 등)
+    3. 적정 환경(온도 20~26도, 습도 40~60%, 낮은 조도, 적은 움직임)일수록 100점에 가깝습니다.
+    4. 결과는 반드시 JSON 형식으로만 출력하세요.
+
     [출력 예시]
     {{
-        "score": 85,
-        "feedback": "온도는 적절했으나 습도가 조금 높았습니다. 제습기를 켜보세요."
+        "score": 92,
+        "feedback": "수면 시간은 2시간으로 짧았지만, 온습도가 완벽하고 뒤척임이 거의 없어 매우 깊은 잠을 주무셨네요!"
     }}
     """
 
