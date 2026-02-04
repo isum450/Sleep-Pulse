@@ -3,6 +3,6 @@ pandas
 influxdb-client
 paho-mqtt
 python-dotenv
-google-generativeai
+google-generativeai>=0.8.3
 SQLAlchemy
 psycopg2-binary

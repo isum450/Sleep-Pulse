@@ -11,7 +11,7 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 if api_key:
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.0-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 def analyze_sleep_data(sensor_summary):
     """
