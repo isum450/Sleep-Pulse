@@ -119,7 +119,7 @@ void loop() {
   Serial.print(",");
   Serial.println(illuminanceValue);      //조도센서 값 출력
 */
-  delay(100);
+  delay(500);
 }
 
 void get6050(){

@@ -197,31 +197,48 @@ def main():
         
         # 녹화 중인지 아닌지에 따라 UI 다르게 보여주기
         if st.session_state['is_recording']:
-            st.success(f"현재 '{st.session_state['username']}'님의 데이터를 수집 중입니다... ")
-            
+            # 경과 시간 계산 및 표시
             if st.session_state['recording_start_dt']:
                 elapsed = datetime.now() - st.session_state['recording_start_dt']
-                # 보기 좋게 시:분:초로 자름
                 elapsed_str = str(elapsed).split('.')[0] 
-                st.success(f"데이터 수집 중... (경과 시간: {elapsed_str})")
+                st.success(f"현재 '{st.session_state['username']}'님의 데이터를 수집 중입니다... (경과 시간: {elapsed_str})")
             else:
-                st.success(f"데이터 수집 중...")
+                st.success(f"현재 '{st.session_state['username']}'님의 데이터를 수집 중입니다...")
 
             if st.button("⏹️ 수집 중지"):
-                # 1. DB 업데이트 (user_manager 함수 사용!)
+                # 1. 종료 시간 및 기간 계산
                 end_dt = datetime.now()
                 start_dt = st.session_state['recording_start_dt']
                 
                 duration_str = "알 수 없음"
-
                 if start_dt:
                     total_duration = end_dt - start_dt
                     duration_str = str(total_duration).split('.')[0]
-                
+
+                # 2. MQTT로 센서 끄기 명령 전송
                 send_mqtt_command("STOP")
-                db.update_recording_status(st.session_state['username'], False)
-                # 2. 화면 상태 변경
+                
+                # ---------------------------------------------------------
+                # [핵심 추가] 여기서 데이터를 분석하고 저장해야 합니다!
+                # ---------------------------------------------------------
+                if start_dt:
+                    save_sleep_session(duration_str, start_dt, end_dt)
+                # ---------------------------------------------------------
+
+                # 3. DB 상태 업데이트 (수집 종료 상태로)
+                # (db.update_recording_status 함수가 user_manager.py에 정의되어 있어야 에러 안 남)
+                # 만약 정의 안 했다면 이 줄은 지우거나 pass 처리
+                try:
+                    db.update_recording_status(st.session_state['username'], False)
+                except:
+                    pass
+
+                # 4. 화면 상태 초기화 (순서 중요: 저장 다 끝난 뒤에 초기화)
                 st.session_state['is_recording'] = False
+                st.session_state['recording_start_dt'] = None
+                
+                # 5. 결과 확인할 시간(2초) 주고 새로고침
+                time.sleep(2) 
                 st.rerun()
         else:
             st.info("데이터 수집을 시작하려면 버튼을 누르세요.")
