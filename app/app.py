@@ -83,7 +83,7 @@ def load_data():
         # person1 데이터 중 avg_... 로 시작하는 필드값들을 가져옵니다.
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
-          |> range(start: -8h)
+          |> range(start: -7d)
           |> filter(fn: (r) => r["_measurement"] == "{INFLUX_MEASUREMENT}")
           |> filter(fn: (r) => r["user"] == "{target_name}") 
           |> filter(fn: (r) => r["_field"] == "avg_movement" or r["_field"] == "avg_temperature" or r["_field"] == "avg_humidity" or r["_field"] == "avg_illuminance")
@@ -99,6 +99,27 @@ def load_data():
             
         # '_time' 컬럼을 인덱스로 설정하고, 불필요한 컬럼 제거
         df = df.set_index("_time")
+
+        # 시간 차이 계산
+        time_diff = df.index.to_series().diff()
+
+        #데이터가 10분이상 끊겼다면 저장
+        GAP_THRESHOLD = pd.Timedelta(minutes=10)
+
+        new_session_starts = time_diff[time_diff > GAP_THRESHOLD].index
+        
+        if not new_session_starts.empty:
+            # 가장 마지막 시간 찾기
+            last_start_time = new_session_starts[-1]
+            
+            # 그 시간이후의 데이터만 남기기
+            df = df[df.index >= last_start_time]
+                        
+        else:
+            # 끊긴 적이 없다면 (데이터가 1개뿐이거나 아주 짧은 경우) 그대로 씁니다.
+            pass
+
+
         # 그래프에 필요한 컬럼만 남기기 (태그 정보 등 제외)
         cols_to_keep = [c for c in df.columns if c in ['avg_movement', 'avg_temperature', 'avg_humidity', 'avg_illuminance']]
         return df[cols_to_keep]
