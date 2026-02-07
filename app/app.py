@@ -32,7 +32,7 @@ if 'is_logged_in' not in st.session_state:
 #웹사이트를 처음들어왔을때 실행되고 이제 로그인하면 TURE로 바꾸는 형식
 #username은 고유 사용자 특정을 위함
 
-# 현재 보고 있는 화면을 기억하는 변수 ('menu', 'score', 'graph', 'chat')
+# 현재 보고 있는 화면을 기억하는 변수 ('menu', 'score', 'graph', 'chat', 'my_info', 'history')
 if 'current_view' not in st.session_state:
     st.session_state['current_view'] = 'menu'
 
@@ -83,7 +83,7 @@ def load_data():
         # person1 데이터 중 avg_... 로 시작하는 필드값들을 가져옵니다.
         query = f"""
         from(bucket: "{INFLUX_BUCKET}")
-          |> range(start: -8h)
+          |> range(start: -7d)
           |> filter(fn: (r) => r["_measurement"] == "{INFLUX_MEASUREMENT}")
           |> filter(fn: (r) => r["user"] == "{target_name}") 
           |> filter(fn: (r) => r["_field"] == "avg_movement" or r["_field"] == "avg_temperature" or r["_field"] == "avg_humidity" or r["_field"] == "avg_illuminance")
@@ -99,6 +99,27 @@ def load_data():
             
         # '_time' 컬럼을 인덱스로 설정하고, 불필요한 컬럼 제거
         df = df.set_index("_time")
+
+        # 시간 차이 계산
+        time_diff = df.index.to_series().diff()
+
+        #데이터가 10분이상 끊겼다면 저장
+        GAP_THRESHOLD = pd.Timedelta(minutes=10)
+
+        new_session_starts = time_diff[time_diff > GAP_THRESHOLD].index
+        
+        if not new_session_starts.empty:
+            # 가장 마지막 시간 찾기
+            last_start_time = new_session_starts[-1]
+            
+            # 그 시간이후의 데이터만 남기기
+            df = df[df.index >= last_start_time]
+                        
+        else:
+            # 끊긴 적이 없다면 (데이터가 1개뿐이거나 아주 짧은 경우) 그대로 씁니다.
+            pass
+
+
         # 그래프에 필요한 컬럼만 남기기 (태그 정보 등 제외)
         cols_to_keep = [c for c in df.columns if c in ['avg_movement', 'avg_temperature', 'avg_humidity', 'avg_illuminance']]
         return df[cols_to_keep]
@@ -182,8 +203,15 @@ def main():
             st.divider()
             if st.button("홈", use_container_width=True):
                 go_to_main()
-            st.button("내 정보", use_container_width=True)
-            st.button("데이터 보기", use_container_width=True)
+
+            if st.button("내 정보", use_container_width=True):
+                st.session_state['current_view'] = 'my_info'
+                st.rerun()
+                
+            if st.button("이전 데이터 보기", use_container_width=True):
+                st.session_state['current_view'] = 'history'
+                st.rerun()
+                
             st.divider()
             if st.button("로그아웃", type="primary"):
                 logout()
@@ -413,6 +441,50 @@ def main():
                 # 4. 대화 기록에 저장
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
 
+    elif st.session_state['current_view'] == 'my_info':
+            if st.button("메인으로"):
+                go_to_main()
+            
+            st.title("내 정보")
+            
+            # user_manager.py에서 추가한 get_user_info 사용
+            user_info = db.get_user_info(st.session_state['user_id'])
+            
+            if user_info:
+                with st.container(border=True):
+                    st.text_input("아이디", value=user_info[0], disabled=True)
+                    st.text_input("이름 (닉네임)", value=user_info[1], disabled=True)
+                    email_val = user_info[2] if user_info[2] else "등록되지 않음"
+                    st.text_input("이메일", value=email_val, disabled=True)
+            else:
+                st.error("정보를 불러올 수 없습니다.")
+
+    elif st.session_state['current_view'] == 'history':
+        if st.button("메인으로"):
+            go_to_main()
+
+        st.title("지난 수면 기록")
+        st.caption("지금까지 측정된 모든 수면 기록을 확인합니다.")
+
+        # user_manager.py에서 추가한 get_all_sleep_records 사용
+        records = db.get_all_sleep_records(st.session_state['user_id'])
+            
+        if records:
+            df_history = pd.DataFrame(records, columns=['측정 시간', '수면 점수', 'AI 피드백'])
+                
+            st.dataframe(
+                df_history, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "측정 시간": st.column_config.TextColumn("측정 시간", width="medium"),
+                    "수면 점수": st.column_config.NumberColumn("점수", format="%d점"),
+                    "AI 피드백": st.column_config.TextColumn("피드백", width="large"),
+                }
+            )
+        else:
+            st.info("아직 저장된 수면 기록이 없습니다.")
+    
     # 비로그인 상태일 때 화면
     else:
         st.title("SLEEP PULSE")

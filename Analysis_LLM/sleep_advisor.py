@@ -20,13 +20,17 @@ def analyze_sleep_data(sensor_summary):
     """
     if not api_key:
         return 0, "API 키가 설정되지 않아 분석할 수 없습니다."
+    
+    #움직임 값(1,0)을 백분율(0~100%)로 변환
+    raw_move = sensor_summary.get('avg_movement', 0)
+    move_percentage = raw_move * 100
 
     # 프롬프트: 명확하게 JSON 출력을 요구합니다.
     prompt = f"""
     당신은 수면 환경 분석 전문가입니다. 아래 측정된 센서 데이터를 기반으로 수면 점수(0~100점)를 매기고 조언을 해주세요.
 
     [측정 데이터]
-    - 평균 움직임: {sensor_summary.get('avg_movement', 0):.1f}
+    - 뒤척임 비율: {move_percentage:.1f}% (0%는 완전한 숙면, 100%는 계속 움직임)
     - 평균 온도: {sensor_summary.get('avg_temperature', 0):.1f}도
     - 평균 습도: {sensor_summary.get('avg_humidity', 0):.1f}%
     - 평균 조도: {sensor_summary.get('avg_illuminance', 0):.1f} lux
@@ -35,8 +39,9 @@ def analyze_sleep_data(sensor_summary):
     [채점 기준 및 지시사항]
     1. **중요: 수면 시간이 8시간이 안 되더라도, 감점하지 마세요.** ("짧게 잤지만 꿀잠을 잤다"면 높은 점수를 주세요.)
     2. 오직 **'수면의 질(Quality)'** 에 집중하세요. (온도, 습도, 움직임 안정성 등)
-    3. 적정 환경(온도 20~26도, 습도 40~60%, 낮은 조도, 적은 움직임)일수록 100점에 가깝습니다.
-    4. 결과는 반드시 JSON 형식으로만 출력하세요.
+    3. 뒤척임 비율이 낮을수록(0%에 가까울수록) 높은 점수를 부여하세요. (예: 10% 미만이면 아주 훌륭함)
+    4. 적정 환경(온도 20~26도, 습도 40~60%, 낮은 조도, 적은 움직임)일수록 100점에 가깝습니다.
+    5. 결과는 반드시 JSON 형식으로만 출력하세요.
 
     [출력 예시]
     {{
