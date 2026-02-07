@@ -424,7 +424,7 @@ def main():
                 # 4. 대화 기록에 저장
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
 
-    elif st.session_state['current_view'] == 'my_info':
+        elif st.session_state['current_view'] == 'my_info':
             if st.button("메인으로"):
                 go_to_main()
             
@@ -435,38 +435,38 @@ def main():
             
             if user_info:
                 with st.container(border=True):
-                    st.text_input("아이디", value=user_info[0], disabled=True)
-                    st.text_input("이름 (닉네임)", value=user_info[1], disabled=True)
-                    email_val = user_info[2] if user_info[2] else "등록되지 않음"
-                    st.text_input("이메일", value=email_val, disabled=True)
+                        st.text_input("아이디", value=user_info[0], disabled=True)
+                        st.text_input("이름 (닉네임)", value=user_info[1], disabled=True)
+                        email_val = user_info[2] if user_info[2] else "등록되지 않음"
+                        st.text_input("이메일", value=email_val, disabled=True)
             else:
-                st.error("정보를 불러올 수 없습니다.")
+                    st.error("정보를 불러올 수 없습니다.")
 
-    elif st.session_state['current_view'] == 'history':
-        if st.button("메인으로"):
-            go_to_main()
+        elif st.session_state['current_view'] == 'history':
+            if st.button("메인으로"):
+                go_to_main()
 
-        st.title("지난 수면 기록")
-        st.caption("지금까지 측정된 모든 수면 기록을 확인합니다.")
+            st.title("지난 수면 기록")
+            st.caption("지금까지 측정된 모든 수면 기록을 확인합니다.")
 
-        # user_manager.py에서 추가한 get_all_sleep_records 사용
-        records = db.get_all_sleep_records(st.session_state['user_id'])
+            # user_manager.py에서 추가한 get_all_sleep_records 사용
+            records = db.get_all_sleep_records(st.session_state['user_id'])
             
-        if records:
-            df_history = pd.DataFrame(records, columns=['측정 시간', '수면 점수', 'AI 피드백'])
+            if records:
+                df_history = pd.DataFrame(records, columns=['측정 시간', '수면 점수', 'AI 피드백'])
                 
-            st.dataframe(
-                df_history, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "측정 시간": st.column_config.TextColumn("측정 시간", width="medium"),
-                    "수면 점수": st.column_config.NumberColumn("점수", format="%d점"),
-                    "AI 피드백": st.column_config.TextColumn("피드백", width="large"),
-                }
-            )
-        else:
-            st.info("아직 저장된 수면 기록이 없습니다.")
+                st.dataframe(
+                    df_history, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "측정 시간": st.column_config.TextColumn("측정 시간", width="medium"),
+                        "수면 점수": st.column_config.NumberColumn("점수", format="%d점"),
+                        "AI 피드백": st.column_config.TextColumn("피드백", width="large"),
+                    }
+                )
+            else:
+                st.info("아직 저장된 수면 기록이 없습니다.")
     
     # 비로그인 상태일 때 화면
     else:
