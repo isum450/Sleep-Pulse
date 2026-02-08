@@ -91,7 +91,7 @@ def on_message(client, userdata, msg):
         try:
             data = json.loads(payload)
             
-            m = float(data.get("motion", 0))
+            m = int(data.get("motion", 0))
             h = float(data.get("humidity", 0))
             t = float(data.get("temperature", 0))
             l = int(data.get("illuminance", 0))
@@ -106,27 +106,38 @@ def on_message(client, userdata, msg):
 
 
             if len(buffer_hum) >= 30:
-                #30개가 모였을 때 저장
-                if len(buffer_hum) >= 30:
-                    avg_motion = round(statistics.mean(buffer_motion), 1)
-                    avg_hum = round(statistics.mean(buffer_hum), 1)
-                    avg_temp = round(statistics.mean(buffer_temp), 1)
-                    avg_lux = int(statistics.mean(buffer_lux) / 4)
-
-                    p = Point("sleep_sensor_data") \
-                        .tag("user", current_active_user) \
-                        .field("avg_temperature", avg_temp) \
-                        .field("avg_humidity", avg_hum) \
-                        .field("avg_movement", avg_motion) \
-                        .field("avg_illuminance", avg_lux)
-                    
-                    #DB에 작성(저장)    ,record=p > p를 전송
-                    write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=p)
-                    
-                else:
-                    print("기록 중인 유저가 없습니다. 데이터가 저장되지 않았습니다.")
                 
-                #버퍼 비우기
+                # 움직임 판단 (Max - Min >= 15000)
+                try:
+                    motion_max = max(buffer_motion)
+                    motion_min = min(buffer_motion)
+                    motion_diff = motion_max - motion_min
+
+                    if motion_diff >= 15000:
+                        final_motion = 1  # 움직임 있음
+                    else:
+                        final_motion = 0  # 평온함
+                except ValueError:
+                    # 혹시라도 리스트가 비어있을 경우 에러 방지
+                    final_motion = 0
+
+                avg_hum = round(statistics.mean(buffer_hum), 1)
+                avg_temp = round(statistics.mean(buffer_temp), 1)
+                avg_lux = int(statistics.mean(buffer_lux) / 4)
+
+                # 데이터 포인트 생성
+                p = Point("sleep_sensor_data") \
+                    .tag("user", current_active_user) \
+                    .field("avg_temperature", avg_temp) \
+                    .field("avg_humidity", avg_hum) \
+                    .field("avg_movement", final_motion) \
+                    .field("avg_illuminance", avg_lux)
+                
+                # DB 저장
+                write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=p)
+                print("데이터 저장 완료 (InfluxDB)")
+                
+                # 버퍼 비우기
                 buffer_motion.clear()
                 buffer_hum.clear()
                 buffer_temp.clear()

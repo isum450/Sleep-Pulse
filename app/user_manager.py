@@ -1,5 +1,6 @@
 import sqlite3
 import hashlib
+import datetime
 
 # DB 파일 이름 설정
 DB_FILENAME = 'users.db'
@@ -154,6 +155,38 @@ def update_recording_status(target_username, status):
     except Exception as e:
         print(f"상태 업데이트 에러: {e}")
         return False
+
+def get_user_info(user_id):
+    try:
+        conn = sqlite3.connect(DB_FILENAME)
+        c = conn.cursor()
+        c.execute("SELECT user_id, username, email FROM users WHERE user_id = ?", (user_id,))
+        result = c.fetchone()
+        conn.close()
+        return result # (user_id, username, email)
+    except Exception as e:
+        print(f"유저 정보 조회 실패: {e}")
+        return None
+
+# 2. 특정 유저의 모든 수면 기록 가져오기 (이전 데이터 보기)
+def get_all_sleep_records(user_id):
+    try:
+        conn = sqlite3.connect(DB_FILENAME)
+        c = conn.cursor()
+        # idx 내림차순(DESC) = 최신순 정렬
+        # 필요한 정보: 측정 시간(timestamp), 점수(score), 피드백(feedback)
+        c.execute("""
+            SELECT timestamp, score, feedback 
+            FROM sleep_history 
+            WHERE user_id = ? 
+            ORDER BY idx DESC
+        """, (user_id,))
+        rows = c.fetchall()
+        conn.close()
+        return rows # 리스트 반환
+    except Exception as e:
+        print(f"[에러] 수면 기록 조회 실패: {e}")
+        return []
 
 if __name__ == "__main__":
     init_db()
