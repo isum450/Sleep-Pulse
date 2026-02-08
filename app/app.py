@@ -180,8 +180,7 @@ def main():
             st.subheader("관리자 메뉴 (유저 목록)")
             
             # DB 내용을 가져와서 화면에 보여주기
-            import sqlite3
-            import pandas as pd
+            
             
             # user_manager.py에 있는 경로가 아니라, 현재 실행 위치의 db를 읽어야 함
             # (주의: user_manager를 통해서 가져오는 게 제일 좋지만, 임시로 직접 읽음)
