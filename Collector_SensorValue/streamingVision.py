@@ -1,6 +1,8 @@
 import cv2
 import requests
 import numpy as np
+from datetime import datetime
+
 
 #ESP32 URL
 URL = " "
@@ -8,6 +10,7 @@ AWB = True
 
 thresh = 25 #달라진 픽셀 값 기준치q
 max_diff = 5 # 달라진 픽셀 갯수 기준치 설정
+MotionSumFor10sec = 0 # 10초 간 움직인 픽셀 갯수 총합
 
 a, b, c = None, None, None
 #cap = cv2.VideoCapture(URL + ":81/stream")
@@ -18,8 +21,9 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
 if cap.isOpened():
     ret, a = cap.read()
     ret, b = cap.read()
+    now = datetime.now()
 
-    while ret:
+    while ret :
         ret, c = cap.read()
         draw = c.copy()
         if not ret:
@@ -58,7 +62,16 @@ if cap.isOpened():
         # 컬러 스케일 영상과 스레시홀드 영상을 통합해서 출력
         stacked = np.hstack((draw, cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)))
         cv2.imshow('motion sensor',stacked )
+        
+        time_diff = now - datetime.now()
 
+        if time_diff.total_seconds() > -10 :
+            MotionSumFor10sec += diff_cnt
+        elif time_diff.total_seconds() <= -10 :
+            now = datetime.now()
+        
+        
+        
         # 다음 비교를 위해 영상 순서 정리
         a = b
         b = c
