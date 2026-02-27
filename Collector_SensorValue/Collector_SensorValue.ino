@@ -11,8 +11,8 @@
 DHT dht(DHTPIN, DHTTPE);
 
 const int MPU=0x68;//MPU6050 I2C주소
-const char* ssid = "U+Net7428";//Wifi ssid
-const char* password = "1J3A4AF87#";//Wifi password
+const char* ssid = "TNet2";//Wifi ssid
+const char* password = "@@##tee75682";//Wifi password
 const char* mqtt_server = "broker.emqx.io"; //wifi IP 주소
 
 WiFiClient espClient;
