@@ -1,26 +1,91 @@
 #include<WiFi.h>
-#include<Wire.h>
 #include "DHT.h"
 #include<PubSubClient.h>
 #include <ArduinoJson.h>
-#include <math.h>
+#include "esp_camera.h"
 
-#define DHTPIN 33
+#define CAMERA_MODEL_WROVER_KIT // 카메라 모델 정의
+#define DHTPIN 14
 #define DHTTPE DHT11
 
 DHT dht(DHTPIN, DHTTPE);
 
-const int MPU=0x68;//MPU6050 I2C주소
+void startCameraServer();
+
 const char* ssid = "TNet2";//Wifi ssid
 const char* password = "@@##tee75682";//Wifi password
 const char* mqtt_server = "broker.emqx.io"; //wifi IP 주소
 
+camera_config_t config;
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-int AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;
+void setup_camera()
+{
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = 4;
+  config.pin_d1 = 5;
+  config.pin_d2 = 18;
+  config.pin_d3 = 19;
+  config.pin_d4 = 36;
+  config.pin_d5 = 39;
+  config.pin_d6 = 34;
+  config.pin_d7 = 35;
+  config.pin_xclk = 21;
+  config.pin_pclk = 22;
+  config.pin_vsync = 25;
+  config.pin_href = 23;
+  config.pin_sccb_sda = 26;
+  config.pin_sccb_scl = 27;
+  config.pin_pwdn = -1;  
+  config.pin_reset = -1;
+  config.xclk_freq_hz = 16000000;
+  config.frame_size = FRAMESIZE_VGA;
+  config.pixel_format = PIXFORMAT_JPEG;  // for streaming
+  //config.pixel_format = PIXFORMAT_RGB565; // for face detection/recognition
+  config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
+  config.fb_location = CAMERA_FB_IN_PSRAM;
+  config.jpeg_quality = 18;
+  config.fb_count = 1;
 
-void get6050();
+  // 해상도 품질 관련 설정
+  if (config.pixel_format == PIXFORMAT_JPEG) {
+    if (psramFound()) {
+      config.jpeg_quality = 10;
+      config.fb_count = 2;
+      config.grab_mode = CAMERA_GRAB_LATEST;
+    } else {
+      // Limit the frame size when PSRAM is not available
+      config.frame_size = FRAMESIZE_SVGA;
+      config.fb_location = CAMERA_FB_IN_DRAM;
+    }
+  } else {
+    // Best option for face detection/recognition
+    config.frame_size = FRAMESIZE_240X240;
+#if CONFIG_IDF_TARGET_ESP32S3
+    config.fb_count = 2;
+#endif
+  }
+  // 카메라 초기화 함수 호출, 초기화 실패시 오류 메시지 출력
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
+    Serial.printf("Camera init failed with error 0x%x", err);
+    return;
+  }
+
+  //카메라 센서 정보 가저오는 함수 포인터
+  sensor_t *s = esp_camera_sensor_get(); 
+  if (s->id.PID == OV3660_PID) {
+    s->set_vflip(s, 1);        // 수직 뒤집기
+    s->set_brightness(s, 1);   // 밝기 1올리기
+    s->set_saturation(s, -2);  // 채도 낮추기
+  }
+
+  startCameraServer();
+
+}
 
 void setup_wifi()
 {
@@ -37,7 +102,9 @@ void setup_wifi()
     delay(500);
     Serial.print(".");
   }
-
+  Serial.print("Camera Ready! Use 'http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("' to connect");
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
@@ -73,15 +140,11 @@ void reconnect() {
 
 void setup() {
   setup_wifi();
+  setup_camera();
   client.setServer(mqtt_server, 1883);
   client.setSocketTimeout(60); 
   client.setKeepAlive(60);
   client.setCallback(callback);
-  Wire.begin(27, 26);
-  Wire.beginTransmission(MPU);
-  Wire.write(0x6B);
-  Wire.write(0);//MPU6050 을 동작 대기 모드로 변경
-  Wire.endTransmission(true);
   dht.begin();
   pinMode(32, INPUT);
 }
@@ -92,15 +155,11 @@ void loop() {
   }
   client.loop();
 
-  get6050();//센서값 갱신
-  //받아온 센서값을 출력
-  float VectorMove = sqrt(pow(AcX,2) + pow(AcY, 2) + pow(AcZ, 2));
   float h = dht.readHumidity();    // 습도
   float t = dht.readTemperature(); // 온도(섭씨)
   int illuminanceValue = analogRead(32); //조도센서 값 측정
 
   JsonDocument doc;//JSON형식으로 데이터를 전송하기 위해서
-  doc["motion"] = VectorMove;
   doc["humidity"] = h;
   doc["temperature"] = t;
   doc["illuminance"] = illuminanceValue;
@@ -110,30 +169,5 @@ void loop() {
 
   Serial.println(buffer);
 
- /*
-  Serial.print(VectorMove);
-  Serial.print(",");
-  Serial.print(h);
-  Serial.print(",");
-  Serial.print(t);
-  Serial.print(",");
-  Serial.println(illuminanceValue);      //조도센서 값 출력
-*/
   delay(500);
-}
-
-void get6050(){
-  Wire.beginTransmission(MPU);//MPU6050 호출
-  Wire.write(0x3B);//AcX 레지스터 위치 요청
-  Wire.endTransmission(false);
-  // 데이터 요청 시 실제 읽어온 개수를 확인하는 것이 좋다고 함.
-  if(Wire.requestFrom(MPU, 14, true) == 14) {
-    AcX = Wire.read() << 8 | Wire.read();
-    AcY = Wire.read() << 8 | Wire.read();
-    AcZ = Wire.read() << 8 | Wire.read();
-    Tmp = Wire.read() << 8 | Wire.read();
-    GyX = Wire.read() << 8 | Wire.read();
-    GyY = Wire.read() << 8 | Wire.read();
-    GyZ = Wire.read() << 8 | Wire.read();
-  } 
 }
