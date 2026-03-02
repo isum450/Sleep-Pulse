@@ -1,5 +1,5 @@
 import json
-import time #사용안해도댐 influx db 에서 시간 저장해주니까
+from datetime import datetime
 import statistics
 import sqlite3
 import paho.mqtt.client as mqtt
