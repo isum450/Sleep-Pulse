@@ -99,7 +99,6 @@ def on_message(client, userdata, msg):
             t = float(data.get("temperature", 0))
             l = int(data.get("illuminance", 0))
 
-            buffer_motion.append(m)
             buffer_hum.append(h)
             buffer_temp.append(t)
             buffer_lux.append(l)
@@ -109,17 +108,19 @@ def on_message(client, userdata, msg):
 
 
             if len(buffer_hum) >= 30:
+                buffer_motion.append(m)
                 
-                # 움직임 판단 (Max - Min >= 15000)
                 try:
-                    motion_max = max(buffer_motion)
-                    motion_min = min(buffer_motion)
-                    motion_diff = motion_max - motion_min
-
-                    if motion_diff >= 15000:
-                        final_motion = 1  # 움직임 있음
+                    if buffer_motion >= 100000:
+                        final_motion = 4
+                    elif 100000 > buffer_motion >= 75000:
+                        final_motion = 3
+                    elif 75000 > buffer_motion >= 50000:
+                        final_motion = 2
+                    elif 50000 > buffer_motion >= 25000:
+                        final_motion = 1
                     else:
-                        final_motion = 0  # 평온함
+                        final_motion = 0
                 except ValueError:
                     # 혹시라도 리스트가 비어있을 경우 에러 방지
                     final_motion = 0
