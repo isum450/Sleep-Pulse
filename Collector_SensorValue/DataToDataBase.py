@@ -121,13 +121,13 @@ def on_message(client, userdata, msg):
                 buffer_motion.append(m)
                 
                 try:
-                    if buffer_motion >= 100000:
+                    if m >= 100000:
                         final_motion = 4
-                    elif 100000 > buffer_motion >= 75000:
+                    elif 100000 > m >= 75000:
                         final_motion = 3
-                    elif 75000 > buffer_motion >= 50000:
+                    elif 75000 > m >= 50000:
                         final_motion = 2
-                    elif 50000 > buffer_motion >= 25000:
+                    elif 50000 > m >= 25000:
                         final_motion = 1
                     else:
                         final_motion = 0
