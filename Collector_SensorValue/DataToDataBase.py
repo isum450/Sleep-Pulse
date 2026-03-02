@@ -4,6 +4,7 @@ import statistics
 import sqlite3
 import paho.mqtt.client as mqtt
 import certifi
+import streamingVision
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
@@ -91,7 +92,9 @@ def on_message(client, userdata, msg):
         try:
             data = json.loads(payload)
             
-            m = int(data.get("motion", 0))
+            m = int(streamingVision.MotionSumFor10sec)
+            streamingVision.MotionSumFor10sec = 0
+            streamingVision.now = datetime.now()
             h = float(data.get("humidity", 0))
             t = float(data.get("temperature", 0))
             l = int(data.get("illuminance", 0))
