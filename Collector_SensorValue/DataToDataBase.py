@@ -46,6 +46,16 @@ except Exception as e:
     print("InfluxDB initialization failed")
     exit()
 
+# [중요] 영상 처리를 백그라운드에서 실행할 함수
+def start_vision_thread():
+    try:
+        # streamingVision.py 안에 있는 실행 로직을 호출합니다.
+        # 만약 streamingVision.py 파일이 실행 코드를 함수 안에 넣지 않았다면 
+        # 그 파일의 루프가 여기서 돌아가게 됩니다.
+        streamingVision.run_vision() # 추천: streamingVision 내부 루프를 함수화하세요.
+    except Exception as e:
+        print(f"Vision Thread Error: {e}")
+
 def on_connect(client, userdata, flags, rc, properties=None):
     print("Connected with result code "+str(rc))
     # 센서 데이터 채널 구독
@@ -151,20 +161,29 @@ def on_message(client, userdata, msg):
         except Exception as e:
             print(f"에러 발생: {e}")
 
+# 메인 실행부
+if __name__ == "__main__":
+    # 2. 영상 처리 쓰레드 시작
+    # daemon=True는 메인 프로그램 종료 시 같이 종료되게 합니다.
+    vision_thread = threading.Thread(target=start_vision_thread, daemon=True)
+    vision_thread.start()
+    print("🚀 영상 처리 쓰레드가 시작되었습니다.")
 
-try:
-    # Paho MQTT v2.x 대응
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-except AttributeError:
-    # Paho MQTT v1.x 대응
-    client = mqtt.Client()
+    # 3. MQTT 클라이언트 설정 및 연결
+    try:
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    except AttributeError:
+        client = mqtt.Client()
 
-client.on_connect = on_connect
-client.on_message = on_message
+    client.on_connect = on_connect
+    client.on_message = on_message
 
-try:
-    print(f"브로커({MQTT_BROKER}) 연결 시도 중...")
-    client.connect(MQTT_BROKER, 1883, 60)
-    client.loop_forever()
-except KeyboardInterrupt:
-    print("\n프로그램 종료")
+    try:
+        print(f"브로커({MQTT_BROKER}) 연결 시도 중...")
+        client.connect(MQTT_BROKER, 1883, 60)
+        
+        # InfluxDB와 MQTT 루프 시작
+        print("📥 데이터 수집 대기 중... (웹에서 시작 버튼을 누르세요)")
+        client.loop_forever() 
+    except KeyboardInterrupt:
+        print("\n프로그램 종료")
