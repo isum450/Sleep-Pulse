@@ -5,6 +5,7 @@ import sqlite3
 import paho.mqtt.client as mqtt
 import certifi
 import streamingVision
+import threading
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
