@@ -3,80 +3,94 @@ import requests
 import numpy as np
 from datetime import datetime
 
+# 1. 설정 및 초기화
+IP_ADDRESS = "192.168.0.36"
+URL = f"http://{IP_ADDRESS}:81/stream"
 
-#ESP32 URL
-URL = "http://192.168.0.36"
-AWB = True
+thresh = 25 
+max_diff = 5 
 
-thresh = 25 #달라진 픽셀 값 기준치q
-max_diff = 5 # 달라진 픽셀 갯수 기준치 설정
-MotionSumFor10sec = 0 # 10초 간 움직인 픽셀 갯수 총합
+# 외부 프로그램(DataToDataBase.py)에서 참조하거나 초기화할 변수
+# 누적된 움직임 값입니다.
+MotionSum = 0 
 
-a, b, c = None, None, None
-cap = cv2.VideoCapture(URL + ":81/stream")
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
+a, b = None, None
 
-if cap.isOpened():
-    ret, a = cap.read()
-    ret, b = cap.read()
-    now = datetime.now()
+def get_motion_count():
+    """외부에서 현재까지 누적된 MotionSum을 가져가기 위한 함수"""
+    global MotionSum
+    return MotionSum
 
-    while ret :
-        ret, c = cap.read()
-        draw = c.copy()
-        if not ret:
-            break
+def reset_motion_count():
+    """DB 전송 완료 후 외부에서 이 값을 0으로 리셋하기 위한 함수"""
+    global MotionSum
+    MotionSum = 0
 
-        # 3개의 영상을 그레이 스케일로 변경
-        a_gray = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY)
-        b_gray = cv2.cvtColor(b, cv2.COLOR_BGR2GRAY)
-        c_gray = cv2.cvtColor(c, cv2.COLOR_BGR2GRAY)
+try:
+    # 스트리밍 연결
+    res = requests.get(URL, stream=True, timeout=10)
+    bytes_data = b''
 
-        # a-b, b-c 절대 값 차 구하기 
-        diff1 = cv2.absdiff(a_gray, b_gray)
-        diff2 = cv2.absdiff(b_gray, c_gray)
+    print("움직임 감지 시작... (데이터 수집 대기 중)")
 
-        # 스레시홀드로 기준치 이내의 차이는 무시
-        ret, diff1_t = cv2.threshold(diff1, thresh, 255, cv2.THRESH_BINARY)
-        ret, diff2_t = cv2.threshold(diff2, thresh, 255, cv2.THRESH_BINARY)
+    for chunk in res.iter_content(chunk_size=1024):
+        bytes_data += chunk
+        a_idx = bytes_data.find(b'\xff\xd8')
+        b_idx = bytes_data.find(b'\xff\xd9')
 
-        # 두 차이에 대해서 AND 연산, 두 영상의 차이가 모두 발견된 경우
-        diff = cv2.bitwise_and(diff1_t, diff2_t)
+        if a_idx != -1 and b_idx != -1:
+            jpg = bytes_data[a_idx:b_idx+2]
+            bytes_data = bytes_data[b_idx+2:]
 
-        # 열림 연산으로 노이즈 제거 ---①
-        k = cv2.getStructuringElement(cv2.MORPH_CROSS, (3,3))
-        diff = cv2.morphologyEx(diff, cv2.MORPH_OPEN, k)
+            c = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if c is None: continue
 
-        # 차이가 발생한 픽셀이 갯수 판단 후 사각형 그리기
-        diff_cnt = cv2.countNonZero(diff)
+            c = cv2.resize(c, (480, 320))
+            draw = c.copy()
 
-        if diff_cnt > max_diff:
-            nzero = np.nonzero(diff)  # 0이 아닌 픽셀의 좌표 얻기(y[...], x[...])
-            cv2.rectangle(draw, (min(nzero[1]), min(nzero[0])), \
-                                (max(nzero[1]), max(nzero[0])), (0,255,0), 2)
-            cv2.putText(draw, "Motion Detected", (10,30), \
-                                cv2.FONT_HERSHEY_DUPLEX, 0.5, (0,0,255))
+            if a is None:
+                a = c.copy()
+                continue
+            if b is None:
+                b = c.copy()
+                continue
+
+            # --- 움직임 감지 로직 ---
+            a_gray = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY)
+            b_gray = cv2.cvtColor(b, cv2.COLOR_BGR2GRAY)
+            c_gray = cv2.cvtColor(c, cv2.COLOR_BGR2GRAY)
+
+            diff1 = cv2.absdiff(a_gray, b_gray)
+            diff2 = cv2.absdiff(b_gray, c_gray)
+            _, diff1_t = cv2.threshold(diff1, thresh, 255, cv2.THRESH_BINARY)
+            _, diff2_t = cv2.threshold(diff2, thresh, 255, cv2.THRESH_BINARY)
+            diff = cv2.bitwise_and(diff1_t, diff2_t)
             
-        # 컬러 스케일 영상과 스레시홀드 영상을 통합해서 출력
-        stacked = np.hstack((draw, cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)))
-        cv2.imshow('motion sensor',stacked )
-        
-        time_diff = now - datetime.now()
+            k = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+            diff = cv2.morphologyEx(diff, cv2.MORPH_OPEN, k)
 
-        if time_diff.total_seconds() > -10 :
-            MotionSumFor10sec += diff_cnt
-        elif time_diff.total_seconds() <= -10 :
-            now = datetime.now()
-        
-        
-        
-        # 다음 비교를 위해 영상 순서 정리
-        a = b
-        b = c
-        
-        if cv2.waitKey(1) & 0xFF == 27:
-            break     
+            diff_cnt = cv2.countNonZero(diff)
 
-cap.release()
-cv2.destroyAllWindows()
+            # 움직임이 기준치 이상일 때만 누적
+            if diff_cnt > max_diff:
+                MotionSum += diff_cnt  # 무한 누적 (외부에서 리셋할 때까지)
+                
+                # 시각화 (선택 사항)
+                nzero = np.nonzero(diff)
+                cv2.rectangle(draw, (min(nzero[1]), min(nzero[0])), \
+                                    (max(nzero[1]), max(nzero[0])), (0, 255, 0), 2)
+
+            # 결과 화면 출력
+            cv2.imshow('Motion Capture System', draw)
+
+            # 프레임 교체
+            a = b
+            b = c
+
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
+
+except Exception as e:
+    print(f"에러 발생: {e}")
+finally:
+    cv2.destroyAllWindows()
