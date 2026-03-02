@@ -94,6 +94,7 @@ def on_message(client, userdata, msg):
             
             m = int(streamingVision.MotionSumFor10sec)
             streamingVision.MotionSumFor10sec = 0
+            streamingVision.now = datetime.now()
             h = float(data.get("humidity", 0))
             t = float(data.get("temperature", 0))
             l = int(data.get("illuminance", 0))
