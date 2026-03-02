@@ -5,7 +5,7 @@ from datetime import datetime
 
 
 #ESP32 URL
-URL = " "
+URL = "http://192.168.0.36"
 AWB = True
 
 thresh = 25 #달라진 픽셀 값 기준치q
@@ -13,8 +13,7 @@ max_diff = 5 # 달라진 픽셀 갯수 기준치 설정
 MotionSumFor10sec = 0 # 10초 간 움직인 픽셀 갯수 총합
 
 a, b, c = None, None, None
-#cap = cv2.VideoCapture(URL + ":81/stream")
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(URL + ":81/stream")
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
 

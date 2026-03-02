@@ -105,7 +105,7 @@ def on_message(client, userdata, msg):
             buffer_lux.append(l)
 
             #현재 버퍼 상태 출력
-            print(f"   데이터 수집 중 ({len(buffer_hum)}/30) - {current_active_user}")
+            print(f"   데이터 수집 중 ({len(buffer_hum)}/30) - {buffer_motion}- {current_active_user}")
 
 
             if len(buffer_hum) >= 30:
