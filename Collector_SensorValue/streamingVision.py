@@ -90,8 +90,8 @@ def run_vision():
                 cv2.imshow('Sleep Motion Monitor', draw)
 
                 # 프레임 교체
-                a = b
-                b = c
+                a = b.copy()
+                b = c.copy()
 
                 # ESC 키 누르면 루프 탈출
                 if cv2.waitKey(1) & 0xFF == 27:
