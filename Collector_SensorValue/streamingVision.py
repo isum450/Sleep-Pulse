@@ -22,7 +22,7 @@ def run_vision():
     """실제 카메라 스트리밍 및 움직임 감지 루프"""
     global MotionSumFor10sec, now
     
-    IP_ADDRESS = "192.168.0.36"
+    IP_ADDRESS = "192.168.0.55"
     URL = f"http://{IP_ADDRESS}:81/stream"
     
     thresh = 25 
@@ -90,8 +90,8 @@ def run_vision():
                 cv2.imshow('Sleep Motion Monitor', draw)
 
                 # 프레임 교체
-                a = b.copy()
-                b = c.copy()
+                a = b
+                b = c
 
                 # ESC 키 누르면 루프 탈출
                 if cv2.waitKey(1) & 0xFF == 27:
