@@ -22,7 +22,7 @@ def run_vision():
     """실제 카메라 스트리밍 및 움직임 감지 루프"""
     global MotionSumFor10sec, now
     
-    IP_ADDRESS = "192.168.0.55"
+    IP_ADDRESS = "192.168.0.42"
     URL = f"http://{IP_ADDRESS}:81/stream"
     
     thresh = 25 

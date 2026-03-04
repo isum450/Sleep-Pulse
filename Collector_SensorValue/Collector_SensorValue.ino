@@ -12,8 +12,10 @@ DHT dht(DHTPIN, DHTTPE);
 
 void startCameraServer();
 
-const char* ssid = "studycafe";//Wifi ssid
-const char* password = "new12345";//Wifi password
+//const char* ssid = "studycafe";//Wifi ssid
+//const char* password = "new12345";//Wifi password
+const char* ssid = "TNet2";//Wifi ssid
+const char* password = "@@##tee75682";//Wifi password
 const char* mqtt_server = "broker.emqx.io"; //wifi IP 주소
 
 camera_config_t config;
